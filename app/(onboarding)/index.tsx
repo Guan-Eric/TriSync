@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { format, formatISO, isBefore, startOfDay } from 'date-fns';
+import { format, formatISO, isBefore, parseISO, startOfDay } from 'date-fns';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { completeOnboarding } from '@/lib/userData';
+import { selectPlan } from '@/content/plans/catalog';
+import { computePlanSchedule } from '@/lib/plans';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Screen, Card } from '@/components/ui/Screen';
@@ -41,6 +43,13 @@ export default function OnboardingScreen() {
 
   const today = useMemo(() => startOfDay(new Date()), []);
   const pickerValue = raceDate ?? today;
+
+  const schedulePreview = useMemo(() => {
+    if (!raceDate) return null;
+    const plan = selectPlan(raceDistance, experienceLevel);
+    if (!plan) return null;
+    return computePlanSchedule(toDateKey(raceDate), plan.weeks, today);
+  }, [raceDate, raceDistance, experienceLevel, today]);
 
   const title = useMemo(
     () =>
@@ -159,7 +168,18 @@ export default function OnboardingScreen() {
               />
             ) : null}
 
-            {!raceDate ? (
+            {schedulePreview ? (
+              <Text variant="caption" className="mt-3">
+                Training starts{' '}
+                {format(parseISO(schedulePreview.startDate), 'EEEE, MMM d, yyyy')}
+                {schedulePreview.weekOffset > 0
+                  ? ` · ${schedulePreview.weeksToGenerate} of ${
+                      selectPlan(raceDistance, experienceLevel)?.weeks ?? '—'
+                    } weeks (race-prep focused)`
+                  : ` · full ${selectPlan(raceDistance, experienceLevel)?.weeks ?? '—'} week plan`}
+                . Start date is set automatically so the plan ends on race day.
+              </Text>
+            ) : !raceDate ? (
               <Text variant="caption" className="mt-2 text-primary">
                 Select a date before continuing.
               </Text>

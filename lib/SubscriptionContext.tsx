@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CustomerInfo } from 'react-native-purchases';
 import { hasProEntitlement, getRevenueCatApiKey } from './revenuecat';
@@ -22,7 +22,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [demoPro, setDemoPro] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const demo = (await AsyncStorage.getItem(DEMO_PRO_KEY)) === '1';
       setDemoPro(demo);
@@ -38,12 +38,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const unlockDemoPro = async () => {
+  const unlockDemoPro = useCallback(async () => {
     await AsyncStorage.setItem(DEMO_PRO_KEY, '1');
     setDemoPro(true);
-  };
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -64,7 +64,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       }
     });
     return () => remove?.();
-  }, [user?.uid]);
+  }, [user?.uid, refresh]);
 
   const value = useMemo(
     () => ({
@@ -74,7 +74,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       refresh,
       unlockDemoPro,
     }),
-    [customerInfo, demoPro, loading]
+    [customerInfo, demoPro, loading, refresh, unlockDemoPro]
   );
 
   return (

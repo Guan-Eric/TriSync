@@ -1,6 +1,8 @@
+import 'react-native-gesture-handler';
 import '../global.css';
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import {
@@ -36,20 +38,28 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <AuthProvider>
-      <SubscriptionProvider>
-        <SessionsProvider>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ecebe8' } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)/sign-in" />
-            <Stack.Screen name="(onboarding)/index" />
-            <Stack.Screen name="(app)" />
-            <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: true, title: 'TriSync Pro' }} />
-            <Stack.Screen name="log/[id]" options={{ presentation: 'modal', headerShown: true, title: 'How did it go?' }} />
-          </Stack>
-        </SessionsProvider>
-      </SubscriptionProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <SubscriptionProvider>
+          <SessionsProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ecebe8' } }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(auth)/sign-in" />
+              <Stack.Screen name="(onboarding)/index" />
+              <Stack.Screen name="(app)" />
+              <Stack.Screen
+                name="paywall"
+                options={{ presentation: 'modal', headerShown: true, title: 'TriSync Pro' }}
+              />
+              <Stack.Screen
+                name="log/[id]"
+                options={{ presentation: 'modal', headerShown: true, title: 'How did it go?' }}
+              />
+            </Stack>
+          </SessionsProvider>
+        </SubscriptionProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

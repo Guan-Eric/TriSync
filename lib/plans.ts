@@ -25,8 +25,9 @@ export function catchUpWeekKey(reference = new Date()) {
 }
 
 /**
- * Align the plan so the last day of the last week lands on race day.
- * If the race is sooner than a full plan, start today and keep the last N template weeks.
+ * Align the plan so training fits into [startDate, raceDate].
+ * Start is max(idealStart, today). If the window is shorter than the full plan,
+ * keep the last N template weeks (taper/race prep).
  */
 export function computePlanSchedule(
   raceDate: string,
@@ -34,13 +35,13 @@ export function computePlanSchedule(
   today: Date = new Date()
 ) {
   const race = parseISO(raceDate);
-  const todayKey = formatISO(today, { representation: 'date' });
-  const todayDate = parseISO(todayKey);
-
+  const todayDate = parseISO(formatISO(today, { representation: 'date' }));
   const idealStart = addDays(race, -(planWeeks * 7 - 1));
-  const start = maxDate([idealStart, todayDate]);
-  const startDate = formatISO(start, { representation: 'date' });
 
+  let start = maxDate([idealStart, todayDate]);
+  if (start > race) start = todayDate;
+
+  const startDate = formatISO(start, { representation: 'date' });
   const daysAvailable = differenceInCalendarDays(race, start) + 1;
   const weeksAvailable = Math.max(1, Math.min(planWeeks, Math.ceil(daysAvailable / 7)));
   const weekOffset = planWeeks - weeksAvailable;
@@ -187,10 +188,7 @@ export function sessionDetailText(session: AthleteSession) {
   return parts.join('\n\n');
 }
 
-export function buildWeekTemplate(
-  week: number,
-  focus: string,
-  sessions: PlanSessionTemplate[]
-) {
-  return { week, focus, sessions };
+export function weekNumberForDate(planStartDate: string, scheduledDate: string) {
+  const days = differenceInCalendarDays(parseISO(scheduledDate), parseISO(planStartDate));
+  return Math.max(1, Math.floor(days / 7) + 1);
 }

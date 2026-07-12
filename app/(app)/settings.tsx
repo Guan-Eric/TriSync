@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, ScrollView } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { setWearableConnected } from '@/lib/userData';
 import { AppleHealth, Garmin, Strava, getWearableStatus } from '@/lib/wearables';
 import { Screen, Card } from '@/components/ui/Screen';
@@ -10,6 +11,7 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 
 export default function SettingsScreen() {
+  useRefreshOnFocus();
   const { user, profile, signOut, refreshProfile } = useAuth();
   const { isPro, refresh } = useSubscription();
   const [busy, setBusy] = useState<string | null>(null);
@@ -21,13 +23,9 @@ export default function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      refreshWearables();
+      void refreshWearables();
     }, [refreshWearables])
   );
-
-  useEffect(() => {
-    refreshWearables();
-  }, [refreshWearables]);
 
   const requirePro = () => {
     if (!isPro) {

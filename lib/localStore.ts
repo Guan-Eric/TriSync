@@ -108,7 +108,11 @@ export async function localCompleteOnboarding(
   const profile: UserProfile = {
     uid,
     onboardingComplete: true,
-    ...input,
+    raceDistance: input.raceDistance,
+    raceDate: input.raceDate,
+    experienceLevel: input.experienceLevel,
+    weeklyHours: input.weeklyHours,
+    equipment: input.equipment,
     activePlanId: plan.id,
     activeEnrollmentId: enrollmentId,
     createdAt: existing?.createdAt ?? formatISO(new Date()),
@@ -124,12 +128,17 @@ export async function localCompleteOnboarding(
 
 export async function localUpdateRaceSettings(
   uid: string,
-  input: { raceDate: string; raceDistance: RaceDistance }
+  input: {
+    raceDate: string;
+    raceDistance: RaceDistance;
+    experienceLevel: ExperienceLevel;
+    equipment: EquipmentAccess;
+  }
 ) {
   const profile = await localGetProfile(uid);
-  if (!profile?.experienceLevel) throw new Error('Complete onboarding first');
+  if (!profile?.onboardingComplete) throw new Error('Complete onboarding first');
 
-  const plan = selectPlan(input.raceDistance, profile.experienceLevel);
+  const plan = selectPlan(input.raceDistance, input.experienceLevel);
   if (!plan) throw new Error('No plan found for selection');
 
   const today = formatISO(new Date(), { representation: 'date' });
@@ -173,6 +182,8 @@ export async function localUpdateRaceSettings(
     ...profile,
     raceDate: input.raceDate,
     raceDistance: input.raceDistance,
+    experienceLevel: input.experienceLevel,
+    equipment: input.equipment,
     activePlanId: plan.id,
     activeEnrollmentId: enrollmentId,
     catchUpDismissedWeekKey: null,
@@ -229,6 +240,26 @@ export async function localSetWearableFlag(
     KEYS.profile(uid),
     JSON.stringify({ ...profile, [flag]: connected, updatedAt: formatISO(new Date()) })
   );
+}
+
+export async function localGetActiveEnrollment(uid: string) {
+  const profile = await localGetProfile(uid);
+  if (!profile?.activeEnrollmentId) return null;
+  const enrollments = await localListEnrollments(uid);
+  return enrollments.find((e) => e.id === profile.activeEnrollmentId) ?? null;
+}
+
+export async function localRescheduleSession(
+  uid: string,
+  sessionId: string,
+  scheduledDate: string,
+  weekNumber: number
+) {
+  const sessions = await localListSessions(uid);
+  const next = sessions.map((s) =>
+    s.id === sessionId ? { ...s, scheduledDate, weekNumber } : s
+  );
+  await AsyncStorage.setItem(KEYS.sessions(uid), JSON.stringify(next));
 }
 
 export async function localSetGarminConnected(uid: string, connected: boolean) {

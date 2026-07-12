@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { sessionByDate } from '@/lib/plans';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
@@ -13,6 +14,7 @@ import { SessionRow } from '@/components/SessionRow';
 import { CatchUpSheet } from '@/components/CatchUpSheet';
 
 export default function TodayScreen() {
+  useRefreshOnFocus();
   const { profile } = useAuth();
   const {
     sessions,

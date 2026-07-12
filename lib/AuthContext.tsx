@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   User,
   onAuthStateChanged,
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const demoSessionRef = useRef(false);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     const uid = user?.uid;
     if (!uid) {
       setProfile(null);
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const p = await getUserProfile(uid);
     setProfile(p);
-  };
+  }, [user?.uid]);
 
   useEffect(() => {
     configureRevenueCat().catch(() => undefined);
@@ -230,7 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInDemo,
       signOut,
     }),
-    [user, profile, loading]
+    [user, profile, loading, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

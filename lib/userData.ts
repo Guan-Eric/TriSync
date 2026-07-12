@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { formatISO } from 'date-fns';
 import { db } from './firebase';
-import { computePlanSchedule, materializeSessions } from './plans';
+import { computePlanSchedule, materializeSessions, weekNumberForDate } from './plans';
 import { selectPlan } from '../content/plans/catalog';
 import {
   localApplyCatchUp,
@@ -22,6 +22,8 @@ import {
   localListSessions,
   localLogSession,
   localPatchProfile,
+  localGetActiveEnrollment,
+  localRescheduleSession,
   localSetWearableFlag,
   localUpdateRaceSettings,
   shouldUseLocal,
@@ -115,7 +117,11 @@ export async function completeOnboarding(
   batch.set(
     doc(db, 'users', uid),
     {
-      ...input,
+      raceDistance: input.raceDistance,
+      raceDate: input.raceDate,
+      experienceLevel: input.experienceLevel,
+      weeklyHours: input.weeklyHours,
+      equipment: input.equipment,
       onboardingComplete: true,
       activePlanId: plan.id,
       activeEnrollmentId: enrollmentId,
@@ -130,14 +136,19 @@ export async function completeOnboarding(
 
 export async function updateRaceSettings(
   uid: string,
-  input: { raceDate: string; raceDistance: RaceDistance }
+  input: {
+    raceDate: string;
+    raceDistance: RaceDistance;
+    experienceLevel: ExperienceLevel;
+    equipment: EquipmentAccess;
+  }
 ) {
   if (shouldUseLocal(uid)) return localUpdateRaceSettings(uid, input);
 
   const profile = await getUserProfile(uid);
-  if (!profile?.experienceLevel) throw new Error('Complete onboarding first');
+  if (!profile?.onboardingComplete) throw new Error('Complete onboarding first');
 
-  const plan = selectPlan(input.raceDistance, profile.experienceLevel);
+  const plan = selectPlan(input.raceDistance, input.experienceLevel);
   if (!plan) throw new Error('No plan found for selection');
 
   const today = formatISO(new Date(), { representation: 'date' });
@@ -209,6 +220,8 @@ export async function updateRaceSettings(
     {
       raceDate: input.raceDate,
       raceDistance: input.raceDistance,
+      experienceLevel: input.experienceLevel,
+      equipment: input.equipment,
       activePlanId: plan.id,
       activeEnrollmentId: enrollmentId,
       catchUpDismissedWeekKey: null,
@@ -240,6 +253,34 @@ export async function logSession(uid: string, sessionId: string, logStatus: LogS
   await updateDoc(doc(db, 'users', uid, 'sessions', sessionId), {
     logStatus,
     loggedAt: formatISO(new Date()),
+  });
+}
+
+export async function getActiveEnrollment(uid: string): Promise<Enrollment | null> {
+  if (shouldUseLocal(uid)) return localGetActiveEnrollment(uid);
+  const profile = await getUserProfile(uid);
+  if (!profile?.activeEnrollmentId) return null;
+  const snap = await getDoc(doc(db, 'users', uid, 'enrollments', profile.activeEnrollmentId));
+  return snap.exists() ? (snap.data() as Enrollment) : null;
+}
+
+export async function rescheduleSession(uid: string, sessionId: string, scheduledDate: string) {
+  const enrollment = await getActiveEnrollment(uid);
+  if (!enrollment) throw new Error('No active enrollment');
+
+  const session = await getSession(uid, sessionId);
+  if (!session) throw new Error('Session not found');
+  if (session.logStatus != null) throw new Error('Logged sessions cannot be moved');
+
+  const weekNumber = weekNumberForDate(enrollment.startDate, scheduledDate);
+
+  if (shouldUseLocal(uid)) {
+    return localRescheduleSession(uid, sessionId, scheduledDate, weekNumber);
+  }
+
+  await updateDoc(doc(db, 'users', uid, 'sessions', sessionId), {
+    scheduledDate,
+    weekNumber,
   });
 }
 

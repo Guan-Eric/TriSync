@@ -6,6 +6,7 @@ import {
   listSessions,
   logSession,
   patchUserProfile,
+  rescheduleSession,
   updateRaceSettings,
 } from './userData';
 import {
@@ -14,18 +15,32 @@ import {
   nextSessionsToSimplify,
   simplifyPrescription,
 } from './plans';
-import type { AthleteSession, LogStatus, RaceDistance } from './types';
+import type {
+  AthleteSession,
+  EquipmentAccess,
+  ExperienceLevel,
+  LogStatus,
+  RaceDistance,
+} from './types';
+
+type RaceSettingsInput = {
+  raceDate: string;
+  raceDistance: RaceDistance;
+  experienceLevel: ExperienceLevel;
+  equipment: EquipmentAccess;
+};
 
 type SessionsContextValue = {
   sessions: AthleteSession[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { silent?: boolean }) => Promise<void>;
   log: (sessionId: string, status: LogStatus) => Promise<void>;
+  reschedule: (sessionId: string, scheduledDate: string) => Promise<void>;
   missedThisWeek: number;
   needsCatchUp: boolean;
   applyCatchUpPlan: () => Promise<void>;
   dismissCatchUp: () => Promise<void>;
-  updateRace: (input: { raceDate: string; raceDistance: RaceDistance }) => Promise<void>;
+  updateRace: (input: RaceSettingsInput) => Promise<void>;
 };
 
 const SessionsContext = createContext<SessionsContextValue | undefined>(undefined);
@@ -35,13 +50,13 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   const [sessions, setSessions] = useState<AthleteSession[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
       setSessions([]);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     try {
       const [data, latestProfile] = await Promise.all([
         listSessions(user.uid),
@@ -50,7 +65,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       const activeId = latestProfile?.activeEnrollmentId;
       setSessions(activeId ? data.filter((s) => s.enrollmentId === activeId) : data);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [user?.uid]);
 
@@ -63,6 +78,23 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       if (!user) return;
       await logSession(user.uid, sessionId, status);
       await refresh();
+    },
+    [user, refresh]
+  );
+
+  const reschedule = useCallback(
+    async (sessionId: string, scheduledDate: string) => {
+      if (!user) return;
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, scheduledDate } : s))
+      );
+      try {
+        await rescheduleSession(user.uid, sessionId, scheduledDate);
+        await refresh();
+      } catch (e) {
+        await refresh();
+        throw e;
+      }
     },
     [user, refresh]
   );
@@ -95,7 +127,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
   }, [user, sessions, weekKey, refreshProfile, refresh]);
 
   const updateRace = useCallback(
-    async (input: { raceDate: string; raceDistance: RaceDistance }) => {
+    async (input: RaceSettingsInput) => {
       if (!user) return;
       await updateRaceSettings(user.uid, input);
       await refreshProfile();
@@ -110,6 +142,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       loading,
       refresh,
       log,
+      reschedule,
       missedThisWeek,
       needsCatchUp,
       applyCatchUpPlan,
@@ -121,6 +154,7 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       loading,
       refresh,
       log,
+      reschedule,
       missedThisWeek,
       needsCatchUp,
       applyCatchUpPlan,

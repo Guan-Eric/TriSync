@@ -3,20 +3,28 @@ import {
   Alert,
   Platform,
   Pressable,
-  ScrollView,
   View,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { format, formatISO, isBefore, parseISO, startOfDay } from 'date-fns';
+import { addDays, format, formatISO, isBefore, parseISO, startOfDay } from 'date-fns';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
-import { getPlanById } from '@/content/plans/catalog';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
+import { getPlanById, selectPlan } from '@/content/plans/catalog';
+import { computePlanSchedule } from '@/lib/plans';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
-import type { RaceDistance } from '@/lib/types';
+import { PlanCalendar } from '@/components/PlanCalendar';
+import type {
+  AthleteSession,
+  EquipmentAccess,
+  ExperienceLevel,
+  RaceDistance,
+} from '@/lib/types';
 
 const distances: { id: RaceDistance; label: string }[] = [
   { id: 'sprint', label: 'Sprint' },
@@ -25,23 +33,60 @@ const distances: { id: RaceDistance; label: string }[] = [
   { id: 'ironman', label: 'Ironman' },
 ];
 
+const levels: { id: ExperienceLevel; label: string }[] = [
+  { id: 'beginner', label: 'Beginner' },
+  { id: 'intermediate', label: 'Intermediate' },
+];
+
+const equipmentItems: { key: keyof EquipmentAccess; label: string }[] = [
+  { key: 'pool', label: 'Pool access' },
+  { key: 'trainer', label: 'Indoor trainer' },
+  { key: 'outdoorBike', label: 'Outdoor bike' },
+];
+
 function distanceLabel(id?: RaceDistance) {
   return distances.find((d) => d.id === id)?.label ?? '—';
 }
 
+function levelLabel(id?: ExperienceLevel) {
+  return levels.find((l) => l.id === id)?.label ?? '—';
+}
+
+function inferEnrollmentStart(sessions: AthleteSession[]) {
+  if (!sessions.length) return null;
+  const candidates = sessions.map((s) =>
+    formatISO(addDays(parseISO(s.scheduledDate), -(s.weekNumber - 1) * 7), {
+      representation: 'date',
+    })
+  );
+  return candidates.sort()[0];
+}
+
 export default function PlanScreen() {
+  useRefreshOnFocus();
   const { profile } = useAuth();
-  const { sessions, updateRace } = useSessions();
+  const { sessions, updateRace, reschedule } = useSessions();
   const { isPro } = useSubscription();
   const plan = profile?.activePlanId ? getPlanById(profile.activePlanId) : undefined;
 
+  const currentStartKey = useMemo(() => inferEnrollmentStart(sessions), [sessions]);
+
   const [editing, setEditing] = useState(false);
+  const [calendarDragging, setCalendarDragging] = useState(false);
   const [raceDistance, setRaceDistance] = useState<RaceDistance>(
     profile?.raceDistance ?? 'olympic'
   );
   const [raceDate, setRaceDate] = useState<Date>(() =>
     profile?.raceDate ? parseISO(profile.raceDate) : startOfDay(new Date())
   );
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>(
+    profile?.experienceLevel ?? 'beginner'
+  );
+  const [equipment, setEquipment] = useState<EquipmentAccess>({
+    pool: profile?.equipment?.pool ?? true,
+    trainer: profile?.equipment?.trainer ?? true,
+    outdoorBike: profile?.equipment?.outdoorBike ?? true,
+  });
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
   const [busy, setBusy] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -50,9 +95,25 @@ export default function PlanScreen() {
   const week1Count = sessions.filter((s) => s.weekNumber === 1 && s.discipline !== 'rest').length;
   const totalCount = sessions.filter((s) => s.discipline !== 'rest').length;
 
+  const editSchedulePreview = useMemo(() => {
+    const selected = selectPlan(raceDistance, experienceLevel);
+    if (!selected) return null;
+    return computePlanSchedule(
+      formatISO(raceDate, { representation: 'date' }),
+      selected.weeks,
+      today
+    );
+  }, [raceDate, raceDistance, experienceLevel, today]);
+
   const openEditor = () => {
     setRaceDistance(profile?.raceDistance ?? 'olympic');
     setRaceDate(profile?.raceDate ? parseISO(profile.raceDate) : startOfDay(new Date()));
+    setExperienceLevel(profile?.experienceLevel ?? 'beginner');
+    setEquipment({
+      pool: profile?.equipment?.pool ?? true,
+      trainer: profile?.equipment?.trainer ?? true,
+      outdoorBike: profile?.equipment?.outdoorBike ?? true,
+    });
     setShowPicker(Platform.OS === 'ios');
     setSavedMessage(null);
     setEditing(true);
@@ -67,6 +128,10 @@ export default function PlanScreen() {
     setRaceDate(startOfDay(selected));
   };
 
+  const toggleEquipment = (key: keyof EquipmentAccess) => {
+    setEquipment((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const saveRace = () => {
     if (isBefore(raceDate, today)) {
       Alert.alert('Race date', 'Choose today or a future race date.');
@@ -75,7 +140,7 @@ export default function PlanScreen() {
 
     Alert.alert(
       'Rebuild schedule?',
-      "We'll rebuild your upcoming schedule so training ends on race day. Logged workouts stay in history.",
+      "We'll rebuild your upcoming schedule from your race, level, and equipment. Logged workouts stay in history.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -87,9 +152,11 @@ export default function PlanScreen() {
               await updateRace({
                 raceDate: formatISO(raceDate, { representation: 'date' }),
                 raceDistance,
+                experienceLevel,
+                equipment,
               });
               setEditing(false);
-              setSavedMessage('Schedule updated for your race.');
+              setSavedMessage('Plan settings updated.');
             } catch (e: unknown) {
               Alert.alert('Could not update', e instanceof Error ? e.message : 'Unknown error');
             } finally {
@@ -110,10 +177,10 @@ export default function PlanScreen() {
         {plan?.name ?? 'No plan'}
       </Text>
 
-      <ScrollView contentContainerClassName="gap-3 pb-10">
+      <ScrollView contentContainerClassName="gap-3 pb-10" scrollEnabled={!calendarDragging}>
         <Card>
           <Text variant="label" className="mb-2">
-            Race
+            Race & setup
           </Text>
           {!editing ? (
             <View className="gap-3">
@@ -124,21 +191,31 @@ export default function PlanScreen() {
                   : 'Date TBD'}
               </Text>
               <Text variant="caption">
-                {plan?.weeks ?? '—'} week plan · {totalCount} key sessions on the calendar
-                {plan?.weeks && profile?.raceDate
-                  ? ` · ends race week`
+                {levelLabel(profile?.experienceLevel)}
+                {currentStartKey
+                  ? ` · Starts ${format(parseISO(currentStartKey), 'MMM d, yyyy')}`
                   : ''}
+                {` · ${plan?.weeks ?? '—'} week plan · ${totalCount} key sessions`}
+              </Text>
+              <Text variant="caption">
+                Pool: {profile?.equipment?.pool ? 'yes' : 'no'} · Trainer:{' '}
+                {profile?.equipment?.trainer ? 'yes' : 'no'} · Outdoor bike:{' '}
+                {profile?.equipment?.outdoorBike ? 'yes' : 'no'} · ~{profile?.weeklyHours ?? '—'}{' '}
+                hrs/week
               </Text>
               {savedMessage ? (
                 <Text className="text-sm text-primary">{savedMessage}</Text>
               ) : null}
-              <Button title="Edit race date or type" variant="secondary" onPress={openEditor} />
+              <Button title="Edit plan settings" variant="secondary" onPress={openEditor} />
             </View>
           ) : (
             <View className="gap-3">
               <Text variant="caption">
-                Changing distance picks a new curated plan. Your schedule will end on race day.
+                Changing distance or level picks a matching curated plan. Start date is set
+                automatically so training ends on race day.
               </Text>
+
+              <Text variant="label">Race distance</Text>
               <View className="flex-row flex-wrap gap-2">
                 {distances.map((d) => (
                   <Pressable key={d.id} onPress={() => setRaceDistance(d.id)}>
@@ -153,6 +230,24 @@ export default function PlanScreen() {
                 ))}
               </View>
 
+              <Text variant="label">Experience</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {levels.map((l) => (
+                  <Pressable key={l.id} onPress={() => setExperienceLevel(l.id)}>
+                    <View
+                      className={`rounded-xl border px-3 py-2 ${
+                        experienceLevel === l.id
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border'
+                      }`}
+                    >
+                      <Text className="font-semibold">{l.label}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text variant="label">Race date</Text>
               <Pressable
                 onPress={() => setShowPicker(true)}
                 className="rounded-xl border border-border bg-background px-4 py-3"
@@ -171,6 +266,37 @@ export default function PlanScreen() {
                   onChange={onDateChange}
                   themeVariant="light"
                 />
+              ) : null}
+
+              <Text variant="label">Equipment</Text>
+              <View className="gap-2">
+                {equipmentItems.map((item) => (
+                  <Pressable key={item.key} onPress={() => toggleEquipment(item.key)}>
+                    <View
+                      className={`rounded-xl border px-3 py-3 ${
+                        equipment[item.key]
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border'
+                      }`}
+                    >
+                      <Text className="font-semibold">
+                        {equipment[item.key] ? '✓ ' : ''}
+                        {item.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+
+              {editSchedulePreview ? (
+                <Text variant="caption">
+                  Training will start{' '}
+                  {format(parseISO(editSchedulePreview.startDate), 'EEEE, MMM d, yyyy')}
+                  {editSchedulePreview.weekOffset > 0
+                    ? ` · ${editSchedulePreview.weeksToGenerate}-week race-prep schedule`
+                    : ` · full ${selectPlan(raceDistance, experienceLevel)?.weeks ?? '—'} week plan`}
+                  .
+                </Text>
               ) : null}
 
               <Button
@@ -211,17 +337,16 @@ export default function PlanScreen() {
           )}
         </Card>
 
-        <Card>
-          <Text variant="label" className="mb-2">
-            Constraints we respect
-          </Text>
-          <Text variant="caption">
-            Pool: {profile?.equipment?.pool ? 'yes' : 'no'} · Trainer:{' '}
-            {profile?.equipment?.trainer ? 'yes' : 'no'} · Outdoor bike:{' '}
-            {profile?.equipment?.outdoorBike ? 'yes' : 'no'} · ~{profile?.weeklyHours ?? '—'}{' '}
-            hrs/week
-          </Text>
-        </Card>
+        <View className="mt-2 gap-2">
+          <Text variant="label">Full schedule</Text>
+          <Text className="mb-1 text-lg font-semibold">Week by week</Text>
+          <PlanCalendar
+            sessions={sessions}
+            isPro={isPro}
+            onReschedule={reschedule}
+            onDraggingChange={setCalendarDragging}
+          />
+        </View>
       </ScrollView>
     </Screen>
   );

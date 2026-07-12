@@ -20,7 +20,7 @@ export default {
     icon: './assets/images/icon.png',
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.trisync.app',
+      bundleIdentifier: 'com.guan-eric.trisync',
       usesAppleSignIn: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,

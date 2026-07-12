@@ -4,6 +4,7 @@ import { addDays, format, formatISO, startOfWeek } from 'date-fns';
 import { router } from 'expo-router';
 import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
+import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { Screen } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +12,7 @@ import { SessionRow } from '@/components/SessionRow';
 import type { AthleteSession } from '@/lib/types';
 
 export default function WeekScreen() {
+  useRefreshOnFocus();
   const { sessions, loading } = useSessions();
   const { isPro } = useSubscription();
 
