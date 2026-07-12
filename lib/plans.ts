@@ -1,0 +1,158 @@
+import {
+  addDays,
+  differenceInCalendarDays,
+  formatISO,
+  parseISO,
+  startOfWeek,
+  isWithinInterval,
+  endOfWeek,
+  max as maxDate,
+} from 'date-fns';
+import type {
+  AthleteSession,
+  LogStatus,
+  PlanSessionTemplate,
+  TrainingPlan,
+} from './types';
+
+export function planIdFor(distance: string, level: string) {
+  return `${distance}_${level}`;
+}
+
+/** Monday date key for the calendar week containing `reference` (weekStartsOn: 1). */
+export function catchUpWeekKey(reference = new Date()) {
+  return formatISO(startOfWeek(reference, { weekStartsOn: 1 }), { representation: 'date' });
+}
+
+/**
+ * Align the plan so the last day of the last week lands on race day.
+ * If the race is sooner than a full plan, start today and keep the last N template weeks.
+ */
+export function computePlanSchedule(
+  raceDate: string,
+  planWeeks: number,
+  today: Date = new Date()
+) {
+  const race = parseISO(raceDate);
+  const todayKey = formatISO(today, { representation: 'date' });
+  const todayDate = parseISO(todayKey);
+
+  const idealStart = addDays(race, -(planWeeks * 7 - 1));
+  const start = maxDate([idealStart, todayDate]);
+  const startDate = formatISO(start, { representation: 'date' });
+
+  const daysAvailable = differenceInCalendarDays(race, start) + 1;
+  const weeksAvailable = Math.max(1, Math.min(planWeeks, Math.ceil(daysAvailable / 7)));
+  const weekOffset = planWeeks - weeksAvailable;
+
+  return { startDate, weeksToGenerate: weeksAvailable, weekOffset };
+}
+
+export function materializeSessions(params: {
+  plan: TrainingPlan;
+  enrollmentId: string;
+  startDate: string;
+  weeksToGenerate?: number;
+  weekOffset?: number;
+}): Omit<AthleteSession, 'id'>[] {
+  const { plan, enrollmentId, startDate } = params;
+  const weekOffset = params.weekOffset ?? 0;
+  const weeksToGenerate = params.weeksToGenerate ?? plan.weeks - weekOffset;
+  const start = parseISO(startDate);
+  const sessions: Omit<AthleteSession, 'id'>[] = [];
+
+  const templates = plan.weekTemplates
+    .filter((week) => week.week > weekOffset && week.week <= weekOffset + weeksToGenerate)
+    .sort((a, b) => a.week - b.week);
+
+  templates.forEach((week, index) => {
+    const calendarWeek = index + 1;
+    for (const template of week.sessions) {
+      const scheduled = addDays(start, (calendarWeek - 1) * 7 + template.dayOffset);
+      sessions.push({
+        enrollmentId,
+        planId: plan.id,
+        weekNumber: calendarWeek,
+        scheduledDate: formatISO(scheduled, { representation: 'date' }),
+        discipline: template.discipline,
+        title: template.title,
+        prescription: template.prescription,
+        whyItMatters: template.whyItMatters,
+        durationMinutes: template.durationMinutes,
+        logStatus: null,
+        loggedAt: null,
+        simplified: false,
+        garminWorkoutId: null,
+      });
+    }
+  });
+
+  return sessions;
+}
+
+export function countMissedThisWeek(sessions: AthleteSession[], reference = new Date()) {
+  const weekStart = startOfWeek(reference, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(reference, { weekStartsOn: 1 });
+  return sessions.filter((s) => {
+    const d = parseISO(s.scheduledDate);
+    return (
+      isWithinInterval(d, { start: weekStart, end: weekEnd }) && s.logStatus === 'missed'
+    );
+  }).length;
+}
+
+export function nextSessionsToSimplify(sessions: AthleteSession[], count = 3) {
+  const today = formatISO(new Date(), { representation: 'date' });
+  return sessions
+    .filter(
+      (s) =>
+        s.scheduledDate >= today &&
+        s.logStatus === null &&
+        s.discipline !== 'rest' &&
+        !s.simplified
+    )
+    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
+    .slice(0, count);
+}
+
+export function simplifyPrescription(session: AthleteSession): Partial<AthleteSession> {
+  return {
+    simplified: true,
+    title: `${session.title} (simplified)`,
+    prescription: `Keep this lighter after missed sessions. Aim for ~${Math.round(
+      session.durationMinutes * 0.7
+    )} min easy effort — technique over intensity. Original: ${session.prescription}`,
+    whyItMatters:
+      'Catch-up mode: protecting consistency beats chasing the original load after a rough week.',
+    durationMinutes: Math.max(20, Math.round(session.durationMinutes * 0.7)),
+  };
+}
+
+export function sessionByDate(sessions: AthleteSession[], date: string) {
+  return sessions
+    .filter((s) => s.scheduledDate === date && s.discipline !== 'rest')
+    .sort((a, b) => a.discipline.localeCompare(b.discipline));
+}
+
+export function logLabel(status: LogStatus) {
+  switch (status) {
+    case 'easy':
+      return 'Felt easy';
+    case 'on_target':
+      return 'On target';
+    case 'hard':
+      return 'Hard';
+    case 'missed':
+      return 'Missed';
+    default:
+      return 'Not logged';
+  }
+}
+
+export function buildWeekTemplate(
+  week: number,
+  focus: string,
+  sessions: PlanSessionTemplate[]
+) {
+  return { week, focus, sessions };
+}

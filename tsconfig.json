@@ -1,0 +1,25 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "uniwind-types.d.ts",
+    "css-modules.d.ts",
+    "node_modules/uniwind/types.d.ts"
+  ],
+  "exclude": [
+    "functions",
+    "scripts",
+    "node_modules"
+  ]
+}
