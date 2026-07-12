@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { addMinutes, parseISO } from 'date-fns';
 import type { AthleteSession, Discipline } from '@/lib/types';
+import { sessionDetailText } from '@/lib/plans';
 
 const FLAG_KEY = 'trisync.healthkit.connected';
 
@@ -79,6 +80,7 @@ export async function pushSessionToAppleHealth(session: AthleteSession) {
       TriSyncSessionId: session.id,
       TriSyncPrescription: session.prescription,
       TriSyncWhy: session.whyItMatters,
+      TriSyncDetail: sessionDetailText(session),
     }
   );
 

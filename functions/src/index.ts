@@ -127,9 +127,23 @@ export const garminPushWorkout = onCall(
     });
 
     // Garmin Training API workout create — payload shaped for a simple single-sport or brick note.
+    const blocks = Array.isArray(session.blocks) ? session.blocks : [];
+    const blockText = blocks
+      .map((b: { label?: string; detail?: string }) => `${b.label ?? ''}: ${b.detail ?? ''}`)
+      .filter(Boolean)
+      .join('\n\n');
+    const description = [
+      session.intensityLabel,
+      blockText || session.prescription,
+      session.whyItMatters ? `Why: ${session.whyItMatters}` : null,
+      session.coachCues ? `Cues: ${session.coachCues}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
     const workout = {
       workoutName: session.title,
-      description: `${session.prescription}\n\nWhy: ${session.whyItMatters}`,
+      description,
       sport: mapDiscipline(session.discipline),
       estimatedDurationInSecs: (session.durationMinutes ?? 30) * 60,
     };

@@ -3,6 +3,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import type { AthleteSession, Discipline } from '@/lib/types';
 import { getExtra } from '@/lib/config';
+import { sessionDetailText } from '@/lib/plans';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -145,7 +146,7 @@ export async function pushSessionToGarmin(session: AthleteSession) {
   const accessToken = await getAccessToken();
   const workout = {
     workoutName: session.title,
-    description: `${session.prescription}\n\nWhy: ${session.whyItMatters}`,
+    description: sessionDetailText(session),
     sport: mapDiscipline(session.discipline),
     estimatedDurationInSecs: (session.durationMinutes ?? 30) * 60,
   };

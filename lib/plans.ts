@@ -79,6 +79,9 @@ export function materializeSessions(params: {
         prescription: template.prescription,
         whyItMatters: template.whyItMatters,
         durationMinutes: template.durationMinutes,
+        blocks: template.blocks,
+        intensityLabel: template.intensityLabel,
+        coachCues: template.coachCues,
         logStatus: null,
         loggedAt: null,
         simplified: false,
@@ -116,15 +119,34 @@ export function nextSessionsToSimplify(sessions: AthleteSession[], count = 3) {
 }
 
 export function simplifyPrescription(session: AthleteSession): Partial<AthleteSession> {
+  const minutes = Math.max(20, Math.round(session.durationMinutes * 0.7));
+  const warm = Math.max(5, Math.round(minutes * 0.2));
+  const cool = Math.max(5, Math.round(minutes * 0.15));
+  const main = Math.max(10, minutes - warm - cool);
+
   return {
     simplified: true,
     title: `${session.title} (simplified)`,
-    prescription: `Keep this lighter after missed sessions. Aim for ~${Math.round(
-      session.durationMinutes * 0.7
-    )} min easy effort — technique over intensity. Original: ${session.prescription}`,
+    prescription: `Keep this lighter after missed sessions. Aim for ~${minutes} min easy effort — technique over intensity. Original: ${session.prescription}`,
     whyItMatters:
       'Catch-up mode: protecting consistency beats chasing the original load after a rough week.',
-    durationMinutes: Math.max(20, Math.round(session.durationMinutes * 0.7)),
+    durationMinutes: minutes,
+    intensityLabel: 'Easy · RPE 2–3',
+    coachCues: 'Skip intensity. If form breaks, shorten the main set and call it done.',
+    blocks: [
+      {
+        label: 'Warm-up',
+        detail: `${warm} min easy Z1–2 — shake out, find rhythm`,
+      },
+      {
+        label: 'Main set',
+        detail: `${main} min continuous easy effort (Z1–2 / RPE 2–3). Technique over pace.`,
+      },
+      {
+        label: 'Cool-down',
+        detail: `${cool} min very easy Z1`,
+      },
+    ],
   };
 }
 
@@ -147,6 +169,22 @@ export function logLabel(status: LogStatus) {
     default:
       return 'Not logged';
   }
+}
+
+/** Full coach-style description for wearables / push payloads. Falls back to prescription. */
+export function sessionDetailText(session: AthleteSession) {
+  const parts: string[] = [];
+  if (session.intensityLabel) parts.push(session.intensityLabel);
+  if (session.blocks?.length) {
+    for (const block of session.blocks) {
+      parts.push(`${block.label}: ${block.detail}`);
+    }
+  } else if (session.prescription) {
+    parts.push(session.prescription);
+  }
+  if (session.whyItMatters) parts.push(`Why: ${session.whyItMatters}`);
+  if (session.coachCues) parts.push(`Cues: ${session.coachCues}`);
+  return parts.join('\n\n');
 }
 
 export function buildWeekTemplate(

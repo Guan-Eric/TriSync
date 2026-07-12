@@ -3,6 +3,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import type { AthleteSession } from '@/lib/types';
 import { getExtra } from '@/lib/config';
+import { sessionDetailText } from '@/lib/plans';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -147,7 +148,7 @@ export async function pushSessionToStrava(session: AthleteSession) {
     sport_type: stravaSport(session.discipline),
     start_date_local: start,
     elapsed_time: String((session.durationMinutes || 30) * 60),
-    description: `${session.prescription}\n\n${session.whyItMatters}\n\nLogged with TriSync`,
+    description: `${sessionDetailText(session)}\n\nLogged with TriSync`,
   });
 
   const res = await fetch('https://www.strava.com/api/v3/activities', {

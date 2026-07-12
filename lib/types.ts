@@ -30,6 +30,11 @@ export type UserProfile = {
   updatedAt: string;
 };
 
+export type SessionBlock = {
+  label: string;
+  detail: string;
+};
+
 export type PlanSessionTemplate = {
   dayOffset: number;
   discipline: Discipline;
@@ -37,6 +42,9 @@ export type PlanSessionTemplate = {
   prescription: string;
   whyItMatters: string;
   durationMinutes: number;
+  blocks: SessionBlock[];
+  intensityLabel?: string;
+  coachCues?: string;
 };
 
 export type PlanWeekTemplate = {
@@ -75,6 +83,9 @@ export type AthleteSession = {
   prescription: string;
   whyItMatters: string;
   durationMinutes: number;
+  blocks?: SessionBlock[];
+  intensityLabel?: string;
+  coachCues?: string;
   logStatus: LogStatus;
   loggedAt?: string | null;
   simplified?: boolean;
