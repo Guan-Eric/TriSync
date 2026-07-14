@@ -7,6 +7,7 @@ import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { sessionByDate } from '@/lib/plans';
+import { pushUpcomingGarminWorkouts } from '@/lib/wearables';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +24,7 @@ export default function TodayScreen() {
     missedThisWeek,
     applyCatchUpPlan,
     dismissCatchUp,
+    refresh,
   } = useSessions();
   const { isPro } = useSubscription();
   const [showCatchUp, setShowCatchUp] = useState(false);
@@ -34,6 +36,15 @@ export default function TodayScreen() {
     if (needsCatchUp && isPro) setShowCatchUp(true);
     else setShowCatchUp(false);
   }, [needsCatchUp, isPro]);
+
+  const showCatchUpUpgrade = needsCatchUp && !isPro;
+
+  useEffect(() => {
+    if (!isPro || !profile?.garminConnected || loading || todays.length === 0) return;
+    void pushUpcomingGarminWorkouts(sessions, profile, { daysAhead: 0, limit: 4 }).then((results) => {
+      if (results.some((r) => r.ok)) void refresh({ silent: true });
+    });
+  }, [isPro, profile?.garminConnected, loading, todays, sessions, refresh]);
 
   if (loading) {
     return (
@@ -101,6 +112,20 @@ export default function TodayScreen() {
             onPress={() => router.push('/paywall')}
             className="mt-2"
           />
+        ) : null}
+
+        {showCatchUpUpgrade ? (
+          <Card className="mt-2">
+            <Text variant="label" className="mb-1">
+              Adaptive catch-up
+            </Text>
+            <Text className="mb-2 font-semibold">Rough week — Pro can rebalance</Text>
+            <Text variant="caption" className="mb-4">
+              You missed {missedThisWeek} sessions this week. Pro simplifies the next few workouts
+              so you stay consistent without a full re-plan.
+            </Text>
+            <Button title="Unlock Pro" onPress={() => router.push('/paywall')} />
+          </Card>
         ) : null}
       </ScrollView>
 

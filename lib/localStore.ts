@@ -133,6 +133,7 @@ export async function localUpdateRaceSettings(
     raceDistance: RaceDistance;
     experienceLevel: ExperienceLevel;
     equipment: EquipmentAccess;
+    weeklyHours: number;
   }
 ) {
   const profile = await localGetProfile(uid);
@@ -140,6 +141,22 @@ export async function localUpdateRaceSettings(
 
   const plan = selectPlan(input.raceDistance, input.experienceLevel);
   if (!plan) throw new Error('No plan found for selection');
+
+  const planAffectingChange =
+    input.raceDate !== profile.raceDate ||
+    input.raceDistance !== profile.raceDistance ||
+    input.experienceLevel !== profile.experienceLevel;
+
+  if (!planAffectingChange) {
+    const nextProfile: UserProfile = {
+      ...profile,
+      equipment: input.equipment,
+      weeklyHours: input.weeklyHours,
+      updatedAt: formatISO(new Date()),
+    };
+    await AsyncStorage.setItem(KEYS.profile(uid), JSON.stringify(nextProfile));
+    return { plan, enrollmentId: profile.activeEnrollmentId ?? null };
+  }
 
   const today = formatISO(new Date(), { representation: 'date' });
   const sessions = await localListSessions(uid);
@@ -184,6 +201,7 @@ export async function localUpdateRaceSettings(
     raceDistance: input.raceDistance,
     experienceLevel: input.experienceLevel,
     equipment: input.equipment,
+    weeklyHours: input.weeklyHours,
     activePlanId: plan.id,
     activeEnrollmentId: enrollmentId,
     catchUpDismissedWeekKey: null,

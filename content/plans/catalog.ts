@@ -518,3 +518,25 @@ export function getPlanById(id: string) {
 export function selectPlan(distance: TrainingPlan['distance'], level: TrainingPlan['level']) {
   return PLAN_CATALOG.find((p) => p.distance === distance && p.level === level);
 }
+
+/** Midpoint of the plan's recommended weekly training window. */
+export function suggestedWeeklyHours(plan: TrainingPlan) {
+  const { min, max } = plan.weeklyHoursTarget;
+  return Math.round((min + max) / 2);
+}
+
+export function weeklyHoursRangeLabel(plan: TrainingPlan) {
+  const { min, max } = plan.weeklyHoursTarget;
+  return min === max ? `${min} hrs/week` : `${min}–${max} hrs/week`;
+}
+
+export function weeklyHoursGuidance(hours: number, plan: TrainingPlan) {
+  const { min, max } = plan.weeklyHoursTarget;
+  if (hours < min) {
+    return `Below the ${min}–${max} hr/week range for this plan — recovery may feel tight.`;
+  }
+  if (hours > max) {
+    return `Above the ${min}–${max} hr/week range — watch fatigue and prioritize easy days.`;
+  }
+  return `Within the ${min}–${max} hr/week range this plan is built for.`;
+}

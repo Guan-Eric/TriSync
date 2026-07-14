@@ -3,7 +3,14 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import type { AthleteSession, Discipline } from '@/lib/types';
 import { getExtra } from '@/lib/config';
+import { auth } from '@/lib/firebase';
+import {
+  garminDisconnectCloud,
+  garminExchangeCode,
+  garminPushWorkoutCloud,
+} from '@/lib/garminApi';
 import { sessionDetailText } from '@/lib/plans';
+import { useLocalData } from '@/lib/localStore';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -23,6 +30,11 @@ function clientSecret() {
   return getExtra('garminClientSecret');
 }
 
+/** Firebase mode stores tokens in Cloud Functions / Firestore. */
+export function usesGarminCloud() {
+  return !useLocalData && Boolean(auth.currentUser);
+}
+
 export function isGarminConfigured() {
   return Boolean(clientId());
 }
@@ -32,7 +44,8 @@ export async function getGarminTokens(): Promise<GarminTokens | null> {
   return raw ? (JSON.parse(raw) as GarminTokens) : null;
 }
 
-export async function isGarminConnected() {
+export async function isGarminConnected(profile?: { garminConnected?: boolean }) {
+  if (usesGarminCloud()) return Boolean(profile?.garminConnected);
   return Boolean(await getGarminTokens());
 }
 
@@ -41,10 +54,17 @@ async function saveTokens(tokens: GarminTokens) {
 }
 
 export async function disconnectGarmin() {
+  if (usesGarminCloud()) {
+    try {
+      await garminDisconnectCloud();
+    } catch {
+      // Still clear local state below.
+    }
+  }
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
-async function exchangeToken(body: URLSearchParams) {
+async function exchangeTokenLocal(body: URLSearchParams) {
   const res = await fetch('https://diauth.garmin.com/di-oauth2-service/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -67,10 +87,10 @@ async function exchangeToken(body: URLSearchParams) {
   return tokens;
 }
 
-export async function connectGarmin() {
+async function runGarminOAuth() {
   const id = clientId();
   if (!id) {
-    throw new Error('Set EXPO_PUBLIC_GARMIN_CLIENT_ID from your Garmin Connect developer app.');
+    throw new Error('Set GARMIN_CLIENT_ID in .env from your Garmin Connect developer app.');
   }
 
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'trisync', path: 'garmin' });
@@ -91,21 +111,36 @@ export async function connectGarmin() {
     throw new Error('Garmin authorization was cancelled.');
   }
 
+  return {
+    code: result.params.code,
+    codeVerifier: request.codeVerifier ?? '',
+    redirectUri,
+  };
+}
+
+export async function connectGarmin() {
+  const oauth = await runGarminOAuth();
+
+  if (usesGarminCloud()) {
+    await garminExchangeCode(oauth);
+    return true;
+  }
+
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
-    code: result.params.code,
-    code_verifier: request.codeVerifier ?? '',
-    redirect_uri: redirectUri,
-    client_id: id,
+    code: oauth.code,
+    code_verifier: oauth.codeVerifier,
+    redirect_uri: oauth.redirectUri,
+    client_id: clientId(),
   });
   const secret = clientSecret();
   if (secret) body.set('client_secret', secret);
 
-  await exchangeToken(body);
+  await exchangeTokenLocal(body);
   return true;
 }
 
-async function getAccessToken() {
+async function getAccessTokenLocal() {
   const tokens = await getGarminTokens();
   if (!tokens) throw new Error('Garmin is not connected.');
   if (Date.now() < tokens.expiresAt - 60_000) return tokens.accessToken;
@@ -119,7 +154,7 @@ async function getAccessToken() {
   if (secret) body.set('client_secret', secret);
 
   try {
-    const next = await exchangeToken(body);
+    const next = await exchangeTokenLocal(body);
     return next.accessToken;
   } catch {
     await disconnectGarmin();
@@ -142,8 +177,8 @@ function mapDiscipline(discipline: Discipline) {
   }
 }
 
-export async function pushSessionToGarmin(session: AthleteSession) {
-  const accessToken = await getAccessToken();
+async function pushSessionLocal(session: AthleteSession) {
+  const accessToken = await getAccessTokenLocal();
   const workout = {
     workoutName: session.title,
     description: sessionDetailText(session),
@@ -160,10 +195,37 @@ export async function pushSessionToGarmin(session: AthleteSession) {
     body: JSON.stringify(workout),
   });
 
+  if (res.status === 401 || res.status === 403) {
+    await disconnectGarmin();
+    throw new Error('Garmin session expired. Reconnect in Settings.');
+  }
+
   if (!res.ok) {
     throw new Error(`Garmin workout push failed (${res.status}): ${await res.text()}`);
   }
 
   const created = (await res.json()) as { workoutId?: string | number };
   return String(created.workoutId ?? '');
+}
+
+export async function pushSessionToGarmin(session: AthleteSession) {
+  if (usesGarminCloud()) {
+    try {
+      const result = await garminPushWorkoutCloud(session.id);
+      return String(result.workoutId ?? '');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (
+        message.includes('unauthenticated') ||
+        message.includes('Garmin not connected') ||
+        message.includes('token refresh failed')
+      ) {
+        await disconnectGarmin();
+        throw new Error('Garmin session expired. Reconnect in Settings.');
+      }
+      throw e;
+    }
+  }
+
+  return pushSessionLocal(session);
 }

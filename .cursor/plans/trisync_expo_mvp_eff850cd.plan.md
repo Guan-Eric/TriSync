@@ -18,10 +18,10 @@ todos:
     content: Today/Week UI + logging + 2+ missed catch-up rule
     status: completed
   - id: revenuecat
-    content: RC weekly/yearly + pro entitlement + paywall gating
+    content: "RC weekly/yearly + pro entitlement + paywall gating (app wired; finish dashboard paywall + ASC products)"
     status: completed
   - id: garmin
-    content: Garmin OAuth + Cloud Function workout push
+    content: Garmin OAuth (PKCE) + CF token storage + workout push + Settings connect/disconnect
     status: completed
   - id: ship
     content: TestFlight polish, App Store metadata, production cut

@@ -137,7 +137,7 @@ export default function LogScreen() {
                   await log(session.id, opt.id);
                   const updated = { ...session, logStatus: opt.id };
                   if (canSync && opt.id !== 'missed') {
-                    const results = await syncSessionToWearables(updated);
+                    const results = await syncSessionToWearables(updated, profile ?? undefined);
                     const failed = results.filter((r) => !r.ok);
                     if (failed.length) {
                       Alert.alert(
@@ -164,7 +164,7 @@ export default function LogScreen() {
               onPress={async () => {
                 try {
                   setBusy(true);
-                  const results = await syncSessionToWearables(session);
+                  const results = await syncSessionToWearables(session, profile ?? undefined);
                   const ok = results.filter((r) => r.ok).map((r) => r.id);
                   const failed = results.filter((r) => !r.ok);
                   Alert.alert(

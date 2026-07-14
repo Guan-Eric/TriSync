@@ -1,6 +1,6 @@
 # App Store Connect checklist (iOS)
 
-Bundle ID: `com.trisync.app`
+Bundle ID: `com.guan-eric.trisync`
 Name: TriSync
 Subtitle: Triathlon training that adapts
 
@@ -11,7 +11,7 @@ Subtitle: Triathlon training that adapts
 - **Purchases**: Subscription status via RevenueCat / App Store
 - **Diagnostics**: Crash/performance if enabled later
 
-Third-party: Garmin Connect OAuth (workout push), Strava OAuth (completed activities). Tokens stay on-device in SecureStore.
+Third-party: Garmin Connect OAuth (workout push via Cloud Functions), Strava OAuth (completed activities). Garmin refresh tokens stored server-side; Strava tokens on-device in SecureStore.
 
 ## Screenshots to capture
 

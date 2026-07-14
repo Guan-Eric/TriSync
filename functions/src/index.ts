@@ -157,6 +157,12 @@ export const garminPushWorkout = onCall(
       body: JSON.stringify(workout),
     });
 
+    if (res.status === 401 || res.status === 403) {
+      await db.doc(`users/${request.auth.uid}/integrations/garmin`).delete();
+      await db.doc(`users/${request.auth.uid}`).set({ garminConnected: false }, { merge: true });
+      throw new HttpsError('unauthenticated', 'Garmin token invalid — reconnect in Settings');
+    }
+
     if (!res.ok) {
       const text = await res.text();
       throw new HttpsError('internal', `Garmin workout push failed: ${text}`);

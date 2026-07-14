@@ -15,6 +15,7 @@ import {
   nextSessionsToSimplify,
   simplifyPrescription,
 } from './plans';
+import { pushUpcomingGarminWorkouts } from './wearables';
 import type {
   AthleteSession,
   EquipmentAccess,
@@ -28,6 +29,7 @@ type RaceSettingsInput = {
   raceDistance: RaceDistance;
   experienceLevel: ExperienceLevel;
   equipment: EquipmentAccess;
+  weeklyHours: number;
 };
 
 type SessionsContextValue = {
@@ -132,6 +134,12 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       await updateRaceSettings(user.uid, input);
       await refreshProfile();
       await refresh();
+      const latestProfile = await getUserProfile(user.uid);
+      if (latestProfile?.garminConnected) {
+        const allSessions = await listSessions(user.uid);
+        await pushUpcomingGarminWorkouts(allSessions, latestProfile);
+        await refresh({ silent: true });
+      }
     },
     [user, refreshProfile, refresh]
   );

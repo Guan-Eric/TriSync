@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { format, formatISO, isBefore, parseISO, startOfDay } from 'date-fns';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { completeOnboarding } from '@/lib/userData';
-import { selectPlan } from '@/content/plans/catalog';
+import {
+  selectPlan,
+  suggestedWeeklyHours,
+  weeklyHoursGuidance,
+  weeklyHoursRangeLabel,
+} from '@/content/plans/catalog';
 import { computePlanSchedule } from '@/lib/plans';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
@@ -36,6 +41,7 @@ export default function OnboardingScreen() {
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('beginner');
   const [weeklyHours, setWeeklyHours] = useState('6');
+  const [hoursTouched, setHoursTouched] = useState(false);
   const [pool, setPool] = useState(true);
   const [trainer, setTrainer] = useState(true);
   const [outdoorBike, setOutdoorBike] = useState(true);
@@ -50,6 +56,17 @@ export default function OnboardingScreen() {
     if (!plan) return null;
     return computePlanSchedule(toDateKey(raceDate), plan.weeks, today);
   }, [raceDate, raceDistance, experienceLevel, today]);
+
+  const hoursPlan = useMemo(
+    () => selectPlan(raceDistance, experienceLevel),
+    [raceDistance, experienceLevel]
+  );
+
+  useEffect(() => {
+    if (step === 3 && hoursPlan && !hoursTouched) {
+      setWeeklyHours(String(suggestedWeeklyHours(hoursPlan)));
+    }
+  }, [step, hoursPlan, hoursTouched]);
 
   const title = useMemo(
     () =>
@@ -202,12 +219,37 @@ export default function OnboardingScreen() {
             <Text variant="caption" className="mb-2">
               Hours you can realistically train each week
             </Text>
+            {hoursPlan ? (
+              <Text variant="caption" className="mb-3">
+                {hoursPlan.name} typically needs {weeklyHoursRangeLabel(hoursPlan)}. Suggested:{' '}
+                {suggestedWeeklyHours(hoursPlan)} hrs.
+              </Text>
+            ) : null}
             <TextInput
               value={weeklyHours}
-              onChangeText={setWeeklyHours}
+              onChangeText={(value) => {
+                setHoursTouched(true);
+                setWeeklyHours(value);
+              }}
               keyboardType="number-pad"
               className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
             />
+            {hoursPlan && Number(weeklyHours) > 0 ? (
+              <Text variant="caption" className="mt-3">
+                {weeklyHoursGuidance(Number(weeklyHours), hoursPlan)}
+              </Text>
+            ) : null}
+            {hoursPlan ? (
+              <Button
+                title={`Use suggested (${suggestedWeeklyHours(hoursPlan)} hrs)`}
+                variant="ghost"
+                className="mt-2"
+                onPress={() => {
+                  setHoursTouched(false);
+                  setWeeklyHours(String(suggestedWeeklyHours(hoursPlan)));
+                }}
+              />
+            ) : null}
           </Card>
         ) : null}
 

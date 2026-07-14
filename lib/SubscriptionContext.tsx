@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CustomerInfo } from 'react-native-purchases';
-import { hasProEntitlement, getRevenueCatApiKey } from './revenuecat';
+import { hasProEntitlement, getPurchasesClient, canUseRevenueCat } from './revenuecat';
 import { useAuth } from './AuthContext';
 
 const DEMO_PRO_KEY = 'trisync:demo_pro';
@@ -26,11 +26,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     try {
       const demo = (await AsyncStorage.getItem(DEMO_PRO_KEY)) === '1';
       setDemoPro(demo);
-      if (!getRevenueCatApiKey()) {
+      if (!canUseRevenueCat()) {
         setCustomerInfo(null);
         return;
       }
-      const Purchases = (await import('react-native-purchases')).default;
+      const Purchases = await getPurchasesClient();
+      if (!Purchases) {
+        setCustomerInfo(null);
+        return;
+      }
       const info = await Purchases.getCustomerInfo();
       setCustomerInfo(info);
     } catch {
@@ -53,9 +57,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
     let remove: (() => void) | undefined;
     refresh().then(async () => {
-      if (!getRevenueCatApiKey()) return;
+      if (!canUseRevenueCat()) return;
       try {
-        const Purchases = (await import('react-native-purchases')).default;
+        const Purchases = await getPurchasesClient();
+        if (!Purchases) return;
         const listener = (info: CustomerInfo) => setCustomerInfo(info);
         Purchases.addCustomerInfoUpdateListener(listener);
         remove = () => Purchases.removeCustomerInfoUpdateListener(listener);

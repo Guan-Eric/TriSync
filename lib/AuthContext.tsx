@@ -165,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: cred.user.email,
         displayName: cred.user.displayName,
       });
+      await loginRevenueCat(cred.user.uid);
       const p = await getUserProfile(cred.user.uid);
       setUser(cred.user);
       setProfile(p);
@@ -196,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: cred.user.email,
           displayName: cred.user.displayName ?? 'Demo Athlete',
         });
+        await loginRevenueCat(cred.user.uid);
         const p = await getUserProfile(cred.user.uid);
         setUser(cred.user);
         setProfile(p);

@@ -4,8 +4,9 @@ import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { setWearableConnected } from '@/lib/userData';
-import { AppleHealth, Garmin, Strava, getWearableStatus } from '@/lib/wearables';
+import { openCustomerCenter, restorePurchases } from '@/lib/revenuecat';
+import { getUserProfile, listSessions, setWearableConnected } from '@/lib/userData';
+import { AppleHealth, Garmin, Strava, getWearableStatus, pushUpcomingGarminWorkouts } from '@/lib/wearables';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -18,8 +19,8 @@ export default function SettingsScreen() {
   const [wearables, setWearables] = useState({ garmin: false, apple: false, strava: false });
 
   const refreshWearables = useCallback(async () => {
-    setWearables(await getWearableStatus());
-  }, []);
+    setWearables(await getWearableStatus(profile ?? undefined));
+  }, [profile]);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,6 +49,27 @@ export default function SettingsScreen() {
     }
   };
 
+  const manageSubscription = async () => {
+    if (!isPro) {
+      router.push('/paywall');
+      return;
+    }
+    try {
+      setBusy('subscription');
+      await openCustomerCenter(async () => {
+        await refresh();
+      });
+      await refresh();
+    } catch (e: unknown) {
+      Alert.alert(
+        'Manage subscription',
+        e instanceof Error ? e.message : 'Customer Center unavailable in this build.'
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <Screen className="pt-14">
       <Text variant="label" className="mb-1">
@@ -64,13 +86,52 @@ export default function SettingsScreen() {
           <Text variant="caption" className="mt-2">
             Subscription: {isPro ? 'Pro' : 'Free'}
           </Text>
+          {!isPro ? (
+            <Text variant="caption" className="mt-1">
+              Free includes logging and week 1. Pro unlocks the full plan, catch-up, and device sync.
+            </Text>
+          ) : null}
+        </Card>
+
+        <Card>
+          <Text className="mb-1 text-lg font-semibold">Subscription</Text>
+          <Text variant="caption" className="mb-4">
+            Weekly includes a 7-day trial. Yearly fits a full training cycle. No fake urgency — cancel
+            anytime in the App Store.
+          </Text>
+          <Button
+            title={isPro ? 'Manage subscription' : 'See weekly & yearly plans'}
+            variant="secondary"
+            disabled={busy === 'subscription'}
+            onPress={manageSubscription}
+            className="mb-3"
+          />
+          <Button
+            title="Restore purchases"
+            variant="ghost"
+            disabled={busy === 'subscription'}
+            onPress={async () => {
+              try {
+                setBusy('subscription');
+                await restorePurchases();
+                await refresh();
+                Alert.alert('Restored', 'Subscription status updated.');
+              } catch (e: unknown) {
+                Alert.alert('Restore failed', e instanceof Error ? e.message : 'Unknown error');
+              } finally {
+                setBusy(null);
+              }
+            }}
+          />
         </Card>
 
         <Card>
           <Text className="mb-1 text-lg font-semibold">Devices & sync</Text>
           <Text variant="caption" className="mb-4">
-            Push workouts to Garmin, Apple Watch (via Health), and Strava — all on-device, no
-            Cloud Functions.
+            Push workouts to Garmin, Apple Watch (via Health), and Strava.
+            {Garmin.usesGarminCloud()
+              ? ' Garmin tokens are stored securely on the server.'
+              : ' Local demo mode stores Garmin tokens on-device.'}
           </Text>
 
           <Text className="mb-2 font-semibold">Garmin</Text>
@@ -87,7 +148,10 @@ export default function SettingsScreen() {
                 run('garmin', async () => {
                   if (!user) return;
                   await Garmin.disconnectGarmin();
-                  await setWearableConnected(user.uid, 'garminConnected', false);
+                  if (!Garmin.usesGarminCloud()) {
+                    await setWearableConnected(user.uid, 'garminConnected', false);
+                  }
+                  await refreshProfile();
                 })
               }
             />
@@ -100,8 +164,20 @@ export default function SettingsScreen() {
                 if (!requirePro() || !user) return;
                 run('garmin', async () => {
                   await Garmin.connectGarmin();
-                  await setWearableConnected(user.uid, 'garminConnected', true);
-                  Alert.alert('Garmin connected', 'Sessions can push to your device from Today or Log.');
+                  if (!Garmin.usesGarminCloud()) {
+                    await setWearableConnected(user.uid, 'garminConnected', true);
+                  }
+                  await refreshProfile();
+                  const latestProfile = await getUserProfile(user.uid);
+                  const sessions = await listSessions(user.uid);
+                  const pushed = await pushUpcomingGarminWorkouts(sessions, latestProfile ?? undefined);
+                  const ok = pushed.filter((r) => r.ok).length;
+                  Alert.alert(
+                    'Garmin connected',
+                    ok
+                      ? `Pushed ${ok} upcoming workout${ok === 1 ? '' : 's'} to Garmin Connect.`
+                      : 'Connected. Open Today or a session to push workouts.'
+                  );
                 });
               }}
             />
@@ -109,8 +185,8 @@ export default function SettingsScreen() {
 
           <Text className="mb-2 font-semibold">Apple Watch / Health</Text>
           <Text variant="caption" className="mb-3">
-            Write workouts to Apple Health so they show on Apple Watch. Requires a native
-            development build.
+            Write workouts to Apple Health so they show on Apple Watch. Requires a native development
+            build.
           </Text>
           {wearables.apple || profile?.appleHealthConnected ? (
             <Button
@@ -175,14 +251,6 @@ export default function SettingsScreen() {
           )}
         </Card>
 
-        <Button
-          title="Manage subscription"
-          variant="secondary"
-          onPress={async () => {
-            await refresh();
-            router.push('/paywall');
-          }}
-        />
         <Button
           title="Sign out"
           variant="ghost"

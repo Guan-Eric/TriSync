@@ -3,6 +3,7 @@ import {
   Alert,
   Platform,
   Pressable,
+  TextInput,
   View,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
@@ -13,7 +14,13 @@ import { useAuth } from '@/lib/AuthContext';
 import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
-import { getPlanById, selectPlan } from '@/content/plans/catalog';
+import {
+  getPlanById,
+  selectPlan,
+  suggestedWeeklyHours,
+  weeklyHoursGuidance,
+  weeklyHoursRangeLabel,
+} from '@/content/plans/catalog';
 import { computePlanSchedule } from '@/lib/plans';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
@@ -87,6 +94,7 @@ export default function PlanScreen() {
     trainer: profile?.equipment?.trainer ?? true,
     outdoorBike: profile?.equipment?.outdoorBike ?? true,
   });
+  const [weeklyHours, setWeeklyHours] = useState(String(profile?.weeklyHours ?? 6));
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
   const [busy, setBusy] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -105,6 +113,13 @@ export default function PlanScreen() {
     );
   }, [raceDate, raceDistance, experienceLevel, today]);
 
+  const editPlan = useMemo(
+    () => selectPlan(raceDistance, experienceLevel),
+    [raceDistance, experienceLevel]
+  );
+
+  const parsedWeeklyHours = Number(weeklyHours);
+
   const openEditor = () => {
     setRaceDistance(profile?.raceDistance ?? 'olympic');
     setRaceDate(profile?.raceDate ? parseISO(profile.raceDate) : startOfDay(new Date()));
@@ -114,6 +129,15 @@ export default function PlanScreen() {
       trainer: profile?.equipment?.trainer ?? true,
       outdoorBike: profile?.equipment?.outdoorBike ?? true,
     });
+    const selected = selectPlan(
+      profile?.raceDistance ?? 'olympic',
+      profile?.experienceLevel ?? 'beginner'
+    );
+    setWeeklyHours(
+      String(
+        profile?.weeklyHours ?? (selected ? suggestedWeeklyHours(selected) : 6)
+      )
+    );
     setShowPicker(Platform.OS === 'ios');
     setSavedMessage(null);
     setEditing(true);
@@ -137,26 +161,41 @@ export default function PlanScreen() {
       Alert.alert('Race date', 'Choose today or a future race date.');
       return;
     }
+    if (!Number.isFinite(parsedWeeklyHours) || parsedWeeklyHours <= 0) {
+      Alert.alert('Weekly hours', 'Enter how many hours you can train each week.');
+      return;
+    }
+
+    const raceDateKey = formatISO(raceDate, { representation: 'date' });
+    const planAffectingChange =
+      raceDateKey !== profile?.raceDate ||
+      raceDistance !== profile?.raceDistance ||
+      experienceLevel !== profile?.experienceLevel;
 
     Alert.alert(
-      'Rebuild schedule?',
-      "We'll rebuild your upcoming schedule from your race, level, and equipment. Logged workouts stay in history.",
+      planAffectingChange ? 'Rebuild schedule?' : 'Save settings?',
+      planAffectingChange
+        ? "We'll rebuild your upcoming schedule from your race, level, and equipment. Logged workouts stay in history."
+        : "We'll update your weekly hours and equipment without changing scheduled sessions.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Rebuild',
-          style: 'destructive',
+          text: planAffectingChange ? 'Rebuild' : 'Save',
+          style: planAffectingChange ? 'destructive' : 'default',
           onPress: async () => {
             try {
               setBusy(true);
               await updateRace({
-                raceDate: formatISO(raceDate, { representation: 'date' }),
+                raceDate: raceDateKey,
                 raceDistance,
                 experienceLevel,
                 equipment,
+                weeklyHours: parsedWeeklyHours,
               });
               setEditing(false);
-              setSavedMessage('Plan settings updated.');
+              setSavedMessage(
+                planAffectingChange ? 'Plan settings updated.' : 'Weekly hours and equipment saved.'
+              );
             } catch (e: unknown) {
               Alert.alert('Could not update', e instanceof Error ? e.message : 'Unknown error');
             } finally {
@@ -202,6 +241,7 @@ export default function PlanScreen() {
                 {profile?.equipment?.trainer ? 'yes' : 'no'} · Outdoor bike:{' '}
                 {profile?.equipment?.outdoorBike ? 'yes' : 'no'} · ~{profile?.weeklyHours ?? '—'}{' '}
                 hrs/week
+                {plan ? ` (plan: ${weeklyHoursRangeLabel(plan)})` : ''}
               </Text>
               {savedMessage ? (
                 <Text className="text-sm text-primary">{savedMessage}</Text>
@@ -288,6 +328,33 @@ export default function PlanScreen() {
                 ))}
               </View>
 
+              <Text variant="label">Weekly hours</Text>
+              {editPlan ? (
+                <Text variant="caption" className="mb-2">
+                  {editPlan.name} typically needs {weeklyHoursRangeLabel(editPlan)}. Suggested:{' '}
+                  {suggestedWeeklyHours(editPlan)} hrs.
+                </Text>
+              ) : null}
+              <TextInput
+                value={weeklyHours}
+                onChangeText={setWeeklyHours}
+                keyboardType="number-pad"
+                className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
+              />
+              {editPlan && parsedWeeklyHours > 0 ? (
+                <Text variant="caption" className="mt-2">
+                  {weeklyHoursGuidance(parsedWeeklyHours, editPlan)}
+                </Text>
+              ) : null}
+              {editPlan ? (
+                <Button
+                  title={`Use suggested (${suggestedWeeklyHours(editPlan)} hrs)`}
+                  variant="ghost"
+                  className="mt-2"
+                  onPress={() => setWeeklyHours(String(suggestedWeeklyHours(editPlan)))}
+                />
+              ) : null}
+
               {editSchedulePreview ? (
                 <Text variant="caption">
                   Training will start{' '}
@@ -300,7 +367,7 @@ export default function PlanScreen() {
               ) : null}
 
               <Button
-                title={busy ? 'Rebuilding…' : 'Save & rebuild schedule'}
+                title={busy ? 'Saving…' : 'Save settings'}
                 disabled={busy}
                 onPress={saveRace}
               />

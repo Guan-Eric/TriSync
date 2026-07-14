@@ -6,6 +6,7 @@ const ENTITLEMENT_ID = 'pro';
 let configured = false;
 let Purchases: typeof import('react-native-purchases').default | null = null;
 let LOG_LEVEL: typeof import('react-native-purchases').LOG_LEVEL | null = null;
+let RevenueCatUI: typeof import('react-native-purchases-ui').default | null = null;
 
 export function getRevenueCatApiKey() {
   const preferTest = getExtra('useLocalData') === 'true' || __DEV__;
@@ -13,6 +14,10 @@ export function getRevenueCatApiKey() {
   const liveKey = getExtra('revenuecatApiKey');
   if (preferTest && testKey) return testKey;
   return liveKey || testKey || '';
+}
+
+export function canUseRevenueCat() {
+  return Platform.OS === 'ios' && Boolean(getRevenueCatApiKey());
 }
 
 async function loadPurchases() {
@@ -25,6 +30,23 @@ async function loadPurchases() {
   } catch {
     return false;
   }
+}
+
+async function loadRevenueCatUI() {
+  if (RevenueCatUI) return true;
+  try {
+    const mod = await import('react-native-purchases-ui');
+    RevenueCatUI = mod.default;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getPurchasesClient() {
+  if (!canUseRevenueCat()) return null;
+  const ok = await loadPurchases();
+  return ok && Purchases ? Purchases : null;
 }
 
 export async function configureRevenueCat(appUserId?: string) {
@@ -55,7 +77,30 @@ export async function loginRevenueCat(uid: string) {
 
 export async function logoutRevenueCat() {
   if (!configured || !Purchases) return;
-  await Purchases.logOut();
+  try {
+    await Purchases.logOut();
+  } catch (e) {
+    // Anonymous users cannot log out of RevenueCat.
+    console.warn('[RevenueCat] logOut skipped', e);
+  }
+}
+
+export async function restorePurchases() {
+  const client = await getPurchasesClient();
+  if (!client) throw new Error('Purchases unavailable in this build.');
+  return client.restorePurchases();
+}
+
+export async function openCustomerCenter(onRestore?: () => void) {
+  const ok = await loadRevenueCatUI();
+  if (!ok || !RevenueCatUI) {
+    throw new Error('Customer Center requires a native development build.');
+  }
+  await RevenueCatUI.presentCustomerCenter({
+    callbacks: {
+      onRestoreCompleted: () => onRestore?.(),
+    },
+  });
 }
 
 export function hasProEntitlement(
