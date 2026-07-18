@@ -4,6 +4,15 @@ Bundle ID: `com.guan-eric.trisync`
 Name: TriSync
 Subtitle: Triathlon training that adapts
 
+## Legal / support URLs (GitHub Pages)
+
+- Support: https://guan-eric.github.io/trisync-legal/support/
+- Privacy Policy: https://guan-eric.github.io/trisync-legal/privacy/
+- Terms of Use: https://guan-eric.github.io/trisync-legal/terms/
+- Repo: https://github.com/Guan-Eric/trisync-legal
+
+Source files also live at `GymPulse/docs/trisync/` for local edits; push updates to `trisync-legal` to republish.
+
 ## Subscriptions (RevenueCat → ASC)
 
 Products are created and priced in App Store Connect via RevenueCat:
