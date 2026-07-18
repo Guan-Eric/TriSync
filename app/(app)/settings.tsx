@@ -2,11 +2,17 @@ import { useCallback, useState } from 'react';
 import { Alert, ScrollView } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
+import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { openCustomerCenter, restorePurchases } from '@/lib/revenuecat';
-import { getUserProfile, listSessions, setWearableConnected } from '@/lib/userData';
-import { AppleHealth, Garmin, Strava, getWearableStatus, pushUpcomingGarminWorkouts } from '@/lib/wearables';
+import { listSessions, setWearableConnected } from '@/lib/userData';
+import {
+  AppleHealth,
+  Strava,
+  getWearableStatus,
+  pushUpcomingAppleWorkouts,
+} from '@/lib/wearables';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +21,7 @@ export default function SettingsScreen() {
   useRefreshOnFocus();
   const { user, profile, signOut, refreshProfile } = useAuth();
   const { isPro, refresh } = useSubscription();
+  const { syncFromStrava, markAppleScheduled, refresh: refreshSessions } = useSessions();
   const [busy, setBusy] = useState<string | null>(null);
   const [wearables, setWearables] = useState({ garmin: false, apple: false, strava: false });
 
@@ -71,7 +78,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen className="pt-14">
+    <Screen>
       <Text variant="label" className="mb-1">
         Settings
       </Text>
@@ -128,80 +135,64 @@ export default function SettingsScreen() {
         <Card>
           <Text className="mb-1 text-lg font-semibold">Devices & sync</Text>
           <Text variant="caption" className="mb-4">
-            Push workouts to Garmin, Apple Watch (via Health), and Strava.
-            {Garmin.usesGarminCloud()
-              ? ' Garmin tokens are stored securely on the server.'
-              : ' Local demo mode stores Garmin tokens on-device.'}
+            Send workout templates to Apple Watch, and import activities you post on Strava. Garmin
+            Connect arrives in a later release.
           </Text>
 
           <Text className="mb-2 font-semibold">Garmin</Text>
           <Text variant="caption" className="mb-3">
-            Push prescribed workouts to Garmin Connect / your watch.
+            Push prescribed workouts to Garmin Connect / your watch. Coming in a later release while
+            we finish Garmin developer approval.
           </Text>
-          {wearables.garmin || profile?.garminConnected ? (
-            <Button
-              title="Disconnect Garmin"
-              variant="outline"
-              disabled={busy !== null}
-              className="mb-4"
-              onPress={() =>
-                run('garmin', async () => {
-                  if (!user) return;
-                  await Garmin.disconnectGarmin();
-                  if (!Garmin.usesGarminCloud()) {
-                    await setWearableConnected(user.uid, 'garminConnected', false);
-                  }
-                  await refreshProfile();
-                })
-              }
-            />
-          ) : (
-            <Button
-              title={busy === 'garmin' ? 'Connecting…' : 'Connect Garmin'}
-              disabled={busy !== null}
-              className="mb-4"
-              onPress={() => {
-                if (!requirePro() || !user) return;
-                run('garmin', async () => {
-                  await Garmin.connectGarmin();
-                  if (!Garmin.usesGarminCloud()) {
-                    await setWearableConnected(user.uid, 'garminConnected', true);
-                  }
-                  await refreshProfile();
-                  const latestProfile = await getUserProfile(user.uid);
-                  const sessions = await listSessions(user.uid);
-                  const pushed = await pushUpcomingGarminWorkouts(sessions, latestProfile ?? undefined);
-                  const ok = pushed.filter((r) => r.ok).length;
-                  Alert.alert(
-                    'Garmin connected',
-                    ok
-                      ? `Pushed ${ok} upcoming workout${ok === 1 ? '' : 's'} to Garmin Connect.`
-                      : 'Connected. Open Today or a session to push workouts.'
-                  );
-                });
-              }}
-            />
-          )}
+          <Button title="Coming in a later release" variant="outline" disabled className="mb-4" />
 
           <Text className="mb-2 font-semibold">Apple Watch / Health</Text>
           <Text variant="caption" className="mb-3">
-            Write workouts to Apple Health so they show on Apple Watch. Requires a native development
-            build.
+            Send prescribed sessions as startable workouts to Fitness / Apple Watch. Requires a
+            native build and iOS 17+.
           </Text>
           {wearables.apple || profile?.appleHealthConnected ? (
-            <Button
-              title="Disconnect Apple Health"
-              variant="outline"
-              disabled={busy !== null}
-              className="mb-4"
-              onPress={() =>
-                run('apple', async () => {
+            <>
+              <Button
+                title={busy === 'apple-push' ? 'Sending…' : 'Send upcoming workouts to Watch'}
+                disabled={busy !== null}
+                className="mb-3"
+                onPress={() => {
                   if (!user) return;
-                  await AppleHealth.disconnectAppleHealth();
-                  await setWearableConnected(user.uid, 'appleHealthConnected', false);
-                })
-              }
-            />
+                  run('apple-push', async () => {
+                    const sessions = await listSessions(user.uid);
+                    const results = await pushUpcomingAppleWorkouts(sessions, {
+                      daysAhead: 7,
+                      limit: 12,
+                    });
+                    for (const r of results.filter((x) => x.ok)) {
+                      await markAppleScheduled(r.sessionId);
+                    }
+                    await refreshSessions({ silent: true });
+                    const ok = results.filter((r) => r.ok).length;
+                    Alert.alert(
+                      'Apple Watch',
+                      ok
+                        ? `Scheduled ${ok} workout${ok === 1 ? '' : 's'} for Fitness / Watch.`
+                        : results[0]?.detail ?? 'Nothing scheduled.'
+                    );
+                  });
+                }}
+              />
+              <Button
+                title="Disconnect Apple Health"
+                variant="outline"
+                disabled={busy !== null}
+                className="mb-4"
+                onPress={() =>
+                  run('apple', async () => {
+                    if (!user) return;
+                    await AppleHealth.disconnectAppleHealth();
+                    await setWearableConnected(user.uid, 'appleHealthConnected', false);
+                  })
+                }
+              />
+            </>
           ) : (
             <Button
               title={busy === 'apple' ? 'Connecting…' : 'Connect Apple Health'}
@@ -212,7 +203,16 @@ export default function SettingsScreen() {
                 run('apple', async () => {
                   await AppleHealth.connectAppleHealth();
                   await setWearableConnected(user.uid, 'appleHealthConnected', true);
-                  Alert.alert('Apple Health connected', 'Completed sessions can sync to Health / Watch.');
+                  const sessions = await listSessions(user.uid);
+                  const results = await pushUpcomingAppleWorkouts(sessions);
+                  for (const r of results.filter((x) => x.ok)) {
+                    await markAppleScheduled(r.sessionId);
+                  }
+                  await refreshSessions({ silent: true });
+                  Alert.alert(
+                    'Apple Health connected',
+                    'Prescribed workouts can be sent to Fitness / Apple Watch so you can start them there.'
+                  );
                 });
               }}
             />
@@ -220,21 +220,40 @@ export default function SettingsScreen() {
 
           <Text className="mb-2 font-semibold">Strava</Text>
           <Text variant="caption" className="mb-3">
-            Post completed sessions as manual activities.
+            Import activities you post on Strava into matching TriSync sessions. TriSync never posts
+            to Strava for you.
           </Text>
           {wearables.strava || profile?.stravaConnected ? (
-            <Button
-              title="Disconnect Strava"
-              variant="outline"
-              disabled={busy !== null}
-              onPress={() =>
-                run('strava', async () => {
-                  if (!user) return;
-                  await Strava.disconnectStrava();
-                  await setWearableConnected(user.uid, 'stravaConnected', false);
-                })
-              }
-            />
+            <>
+              <Button
+                title={busy === 'strava-sync' ? 'Syncing…' : 'Sync from Strava'}
+                disabled={busy !== null}
+                className="mb-3"
+                onPress={() => {
+                  run('strava-sync', async () => {
+                    const count = await syncFromStrava();
+                    Alert.alert(
+                      'Strava sync',
+                      count
+                        ? `Matched ${count} session${count === 1 ? '' : 's'} from your Strava activities.`
+                        : 'No new matching activities found (same day + discipline).'
+                    );
+                  });
+                }}
+              />
+              <Button
+                title="Disconnect Strava"
+                variant="outline"
+                disabled={busy !== null}
+                onPress={() =>
+                  run('strava', async () => {
+                    if (!user) return;
+                    await Strava.disconnectStrava();
+                    await setWearableConnected(user.uid, 'stravaConnected', false);
+                  })
+                }
+              />
+            </>
           ) : (
             <Button
               title={busy === 'strava' ? 'Connecting…' : 'Connect Strava'}
@@ -244,7 +263,13 @@ export default function SettingsScreen() {
                 run('strava', async () => {
                   await Strava.connectStrava();
                   await setWearableConnected(user.uid, 'stravaConnected', true);
-                  Alert.alert('Strava connected', 'Completed sessions can post to Strava.');
+                  const count = await syncFromStrava();
+                  Alert.alert(
+                    'Strava connected',
+                    count
+                      ? `Imported ${count} matching session${count === 1 ? '' : 's'}.`
+                      : 'Connected. Post on Strava, then tap Sync from Strava.'
+                  );
                 });
               }}
             />

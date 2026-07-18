@@ -1,17 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CustomerInfo } from 'react-native-purchases';
 import { hasProEntitlement, getPurchasesClient, canUseRevenueCat } from './revenuecat';
 import { useAuth } from './AuthContext';
-
-const DEMO_PRO_KEY = 'trisync:demo_pro';
 
 type SubscriptionContextValue = {
   customerInfo: CustomerInfo | null;
   isPro: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
-  unlockDemoPro: () => Promise<void>;
 };
 
 const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(undefined);
@@ -19,13 +15,10 @@ const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
-  const [demoPro, setDemoPro] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const demo = (await AsyncStorage.getItem(DEMO_PRO_KEY)) === '1';
-      setDemoPro(demo);
       if (!canUseRevenueCat()) {
         setCustomerInfo(null);
         return;
@@ -42,11 +35,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const unlockDemoPro = useCallback(async () => {
-    await AsyncStorage.setItem(DEMO_PRO_KEY, '1');
-    setDemoPro(true);
   }, []);
 
   useEffect(() => {
@@ -74,12 +62,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const value = useMemo(
     () => ({
       customerInfo,
-      isPro: demoPro || hasProEntitlement(customerInfo),
+      isPro: hasProEntitlement(customerInfo),
       loading,
       refresh,
-      unlockDemoPro,
     }),
-    [customerInfo, demoPro, loading, refresh, unlockDemoPro]
+    [customerInfo, loading, refresh]
   );
 
   return (

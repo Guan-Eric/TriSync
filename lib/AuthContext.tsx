@@ -1,9 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   User,
   onAuthStateChanged,
   signInWithCredential,
-  signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   OAuthProvider,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -13,45 +15,22 @@ import { Platform } from 'react-native';
 import { auth } from './firebase';
 import { ensureUserProfile, getUserProfile } from './userData';
 import { loginRevenueCat, logoutRevenueCat, configureRevenueCat } from './revenuecat';
-import { useLocalData, localEnsureProfile, localGetProfile } from './localStore';
 import type { UserProfile } from './types';
+
+type AuthDestination = 'onboarding' | 'app';
 
 type AuthContextValue = {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
   refreshProfile: () => Promise<void>;
-  signInWithApple: () => Promise<'onboarding' | 'app'>;
-  signInDemo: () => Promise<'onboarding' | 'app'>;
+  signInWithApple: () => Promise<AuthDestination>;
+  signInWithEmail: (email: string, password: string) => Promise<AuthDestination>;
+  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<AuthDestination>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-type DemoUser = User & { isDemo?: boolean };
-
-function makeDemoUser(): DemoUser {
-  return {
-    uid: 'demo-athlete',
-    email: 'demo@trisync.app',
-    displayName: 'Demo Athlete',
-    emailVerified: true,
-    isAnonymous: true,
-    metadata: {} as User['metadata'],
-    providerData: [],
-    refreshToken: '',
-    tenantId: null,
-    delete: async () => undefined,
-    getIdToken: async () => 'demo',
-    getIdTokenResult: async () => ({} as never),
-    reload: async () => undefined,
-    toJSON: () => ({}),
-    phoneNumber: null,
-    photoURL: null,
-    providerId: 'demo',
-    isDemo: true,
-  } as DemoUser;
-}
 
 async function nonce() {
   const raw = Array.from({ length: 32 }, () =>
@@ -63,11 +42,51 @@ async function nonce() {
   return { raw, hashed };
 }
 
+function mapAuthError(e: unknown): Error {
+  const code =
+    typeof e === 'object' && e && 'code' in e && typeof (e as { code: unknown }).code === 'string'
+      ? (e as { code: string }).code
+      : '';
+  const message = e instanceof Error ? e.message : String(e);
+
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return new Error('An account with this email already exists. Sign in instead.');
+    case 'auth/invalid-email':
+      return new Error('Enter a valid email address.');
+    case 'auth/weak-password':
+      return new Error('Password must be at least 6 characters.');
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return new Error('Incorrect email or password.');
+    case 'auth/too-many-requests':
+      return new Error('Too many attempts. Try again later.');
+    case 'auth/network-request-failed':
+      return new Error('Network error. Check your connection and try again.');
+    case 'auth/operation-not-allowed':
+      return new Error('Email sign-in is not enabled yet. Enable Email/Password in Firebase Auth.');
+    default:
+      return e instanceof Error ? e : new Error(message);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const demoSessionRef = useRef(false);
+
+  const finishSession = useCallback(async (next: User): Promise<AuthDestination> => {
+    await ensureUserProfile(next.uid, {
+      email: next.email,
+      displayName: next.displayName,
+    });
+    await loginRevenueCat(next.uid);
+    const p = await getUserProfile(next.uid);
+    setUser(next);
+    setProfile(p);
+    return p?.onboardingComplete ? 'app' : 'onboarding';
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     const uid = user?.uid;
@@ -82,19 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     configureRevenueCat().catch(() => undefined);
 
-    if (useLocalData) {
-      setLoading(false);
-      return;
-    }
-
     const unsub = onAuthStateChanged(auth, async (next) => {
-      // Don't wipe an in-memory demo session when Firebase reports signed-out.
-      if (!next && demoSessionRef.current) {
-        setLoading(false);
-        return;
-      }
-
-      demoSessionRef.current = false;
       setUser(next);
       if (next) {
         try {
@@ -115,33 +122,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, []);
 
-  const startLocalDemo = async (displayName = 'Demo Athlete'): Promise<'onboarding' | 'app'> => {
-    const demo = makeDemoUser();
-    demoSessionRef.current = true;
-    await localEnsureProfile(demo.uid, {
-      email: demo.email,
-      displayName,
-    });
-    const p = await localGetProfile(demo.uid);
-    setUser(demo);
-    setProfile(p);
-    return p?.onboardingComplete ? 'app' : 'onboarding';
-  };
-
-  const signInWithApple = async (): Promise<'onboarding' | 'app'> => {
+  const signInWithApple = async (): Promise<AuthDestination> => {
     if (Platform.OS !== 'ios') {
       throw new Error('Apple Sign-In is only available on iOS');
-    }
-
-    if (useLocalData) {
-      return startLocalDemo('Apple Athlete');
     }
 
     try {
       const available = await AppleAuthentication.isAvailableAsync();
       if (!available) {
         throw new Error(
-          'Sign in with Apple is not available here. On Simulator use “Continue in demo mode”, or sign into an Apple ID under Settings → Apple Account.'
+          'Sign in with Apple is not available. Sign into an Apple ID under Settings → Apple Account, or use a device that supports it.'
         );
       }
 
@@ -159,17 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         idToken: apple.identityToken,
         rawNonce: raw,
       });
-      demoSessionRef.current = false;
       const cred = await signInWithCredential(auth, credential);
-      await ensureUserProfile(cred.user.uid, {
-        email: cred.user.email,
-        displayName: cred.user.displayName,
-      });
-      await loginRevenueCat(cred.user.uid);
-      const p = await getUserProfile(cred.user.uid);
-      setUser(cred.user);
-      setProfile(p);
-      return p?.onboardingComplete ? 'app' : 'onboarding';
+      return finishSession(cred.user);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
       if (
@@ -181,43 +162,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message.includes('not available')
       ) {
         throw new Error(
-          `${message}\n\nOn Simulator, use “Continue in demo mode”. For real Apple login: enable Apple provider in Firebase Auth, and sign into an Apple ID in Simulator Settings.`
+          `${message}\n\nFor Apple login: enable the Apple provider in Firebase Auth, and sign into an Apple ID in Settings.`
         );
       }
       throw e instanceof Error ? e : new Error(message);
     }
   };
 
-  const signInDemo = async (): Promise<'onboarding' | 'app'> => {
-    if (!useLocalData) {
-      try {
-        demoSessionRef.current = false;
-        const cred = await signInAnonymously(auth);
-        await ensureUserProfile(cred.user.uid, {
-          email: cred.user.email,
-          displayName: cred.user.displayName ?? 'Demo Athlete',
-        });
-        await loginRevenueCat(cred.user.uid);
-        const p = await getUserProfile(cred.user.uid);
-        setUser(cred.user);
-        setProfile(p);
-        return p?.onboardingComplete ? 'app' : 'onboarding';
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.warn('[auth] anonymous failed, using local demo', message);
-        return startLocalDemo();
-      }
+  const signInWithEmail = async (email: string, password: string): Promise<AuthDestination> => {
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
+      throw new Error('Enter your email and password.');
     }
+    try {
+      const cred = await signInWithEmailAndPassword(auth, trimmed, password);
+      return finishSession(cred.user);
+    } catch (e) {
+      throw mapAuthError(e);
+    }
+  };
 
-    return startLocalDemo();
+  const signUpWithEmail = async (
+    email: string,
+    password: string,
+    displayName?: string
+  ): Promise<AuthDestination> => {
+    const trimmed = email.trim();
+    const name = displayName?.trim();
+    if (!trimmed || !password) {
+      throw new Error('Enter your email and password.');
+    }
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters.');
+    }
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, trimmed, password);
+      if (name) {
+        await updateProfile(cred.user, { displayName: name });
+      }
+      return finishSession(cred.user);
+    } catch (e) {
+      throw mapAuthError(e);
+    }
   };
 
   const signOut = async () => {
     await logoutRevenueCat().catch(() => undefined);
-    demoSessionRef.current = false;
-    if (!useLocalData) {
-      await firebaseSignOut(auth).catch(() => undefined);
-    }
+    await firebaseSignOut(auth).catch(() => undefined);
     setUser(null);
     setProfile(null);
   };
@@ -229,10 +220,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       refreshProfile,
       signInWithApple,
-      signInDemo,
+      signInWithEmail,
+      signUpWithEmail,
       signOut,
     }),
-    [user, profile, loading, refreshProfile]
+    [user, profile, loading, refreshProfile, finishSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

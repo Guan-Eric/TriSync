@@ -9,8 +9,6 @@ Triathlon training for age-group athletes — curated plans, honest logging, bri
 - Firebase Auth / Firestore (no Cloud Functions required)
 - RevenueCat (`pro` entitlement)
 - On-device wearables: Garmin + Apple HealthKit + Strava (tokens in SecureStore)
-- Local demo mode when Firebase keys are unset
-
 ## Quick start
 
 ```bash
@@ -19,7 +17,7 @@ npm install
 npm start
 ```
 
-Tap **Continue in demo mode** to exercise onboarding → Today → Week → logging. Use **Unlock Pro (local demo)** on the paywall to test gating and wearable settings.
+Sign in with email or Apple, then complete onboarding → Today → Week → logging.
 
 Apple Health / Watch needs a **dev build**: `npx expo run:ios` (not Expo Go).
 
@@ -27,11 +25,11 @@ Apple Health / Watch needs a **dev build**: `npx expo run:ios` (not Expo Go).
 
 Project **`trisync-app`** is set up. Config is loaded from `.env` via [`app.config.js`](./app.config.js) → `expo.extra` (Ascend-style), then read in app code with `expo-constants`.
 
-- iOS app `com.trisync.app` + Web app
+- iOS app `com.guan-eric.trisync` + Web app
 - Firestore `(default)` + security rules deployed
 - `GoogleService-Info.plist` in repo root
 
-Enable **Anonymous** + **Apple** sign-in:  
+Enable **Email/Password** and **Apple** sign-in in Firebase Auth (Email/Password is already on for `trisync-app`):  
 https://console.firebase.google.com/project/trisync-app/authentication/providers
 
 After `eas init`, set `EAS_PROJECT_ID` in `.env`.

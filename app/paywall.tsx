@@ -7,7 +7,6 @@ import {
   canUseRevenueCat,
   ENTITLEMENT_ID,
   getPurchasesClient,
-  getRevenueCatApiKey,
   restorePurchases,
 } from '@/lib/revenuecat';
 import { Screen, Card } from '@/components/ui/Screen';
@@ -40,7 +39,7 @@ function packageHint(pkg: PurchasesPackage) {
 }
 
 export default function PaywallScreen() {
-  const { isPro, refresh, unlockDemoPro } = useSubscription();
+  const { isPro, refresh } = useSubscription();
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [Paywall, setPaywall] = useState<PaywallComponent | null>(null);
@@ -101,18 +100,6 @@ export default function PaywallScreen() {
     }
   };
 
-  const demoUnlock =
-    __DEV__ && !getRevenueCatApiKey() ? (
-      <Button
-        title="Unlock Pro (local demo)"
-        className="mb-3"
-        onPress={async () => {
-          await unlockDemoPro();
-          router.back();
-        }}
-      />
-    ) : null;
-
   if (!ready) {
     return (
       <Screen className="items-center justify-center">
@@ -128,7 +115,7 @@ export default function PaywallScreen() {
         <Card>
           <Text className="text-lg font-semibold">You&apos;re on Pro</Text>
           <Text variant="caption" className="mt-2">
-            Full plan access, adaptive catch-up, and Garmin workout push are unlocked.
+            Full plan access, adaptive catch-up, and device sync are unlocked.
           </Text>
         </Card>
         <Button title="Done" className="mt-4" onPress={() => router.back()} />
@@ -153,7 +140,7 @@ export default function PaywallScreen() {
             <Text className="mb-2 font-semibold">What you get</Text>
             <Text variant="caption">
               · Full curated plan beyond week 1{'\n'}· Adaptive catch-up after rough weeks{'\n'}·
-              Garmin, Apple Health, and Strava sync
+              Apple Watch workout templates + Strava import (Garmin later)
             </Text>
           </Card>
 
@@ -184,7 +171,6 @@ export default function PaywallScreen() {
             </Card>
           )}
 
-          {demoUnlock}
           <Button
             title="Restore purchases"
             variant="secondary"
@@ -217,7 +203,6 @@ export default function PaywallScreen() {
         onDismiss={() => router.back()}
       />
       <View className="px-5 pb-8">
-        {demoUnlock}
         <Button
           title="Restore purchases"
           variant="ghost"

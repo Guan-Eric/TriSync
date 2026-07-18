@@ -7,7 +7,7 @@ import { useSessions } from '@/lib/SessionsContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { useRefreshOnFocus } from '@/lib/useRefreshOnFocus';
 import { sessionByDate } from '@/lib/plans';
-import { pushUpcomingGarminWorkouts } from '@/lib/wearables';
+import { pushUpcomingAppleWorkouts } from '@/lib/wearables';
 import { Screen, Card } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +25,7 @@ export default function TodayScreen() {
     applyCatchUpPlan,
     dismissCatchUp,
     refresh,
+    markAppleScheduled,
   } = useSessions();
   const { isPro } = useSubscription();
   const [showCatchUp, setShowCatchUp] = useState(false);
@@ -40,11 +41,14 @@ export default function TodayScreen() {
   const showCatchUpUpgrade = needsCatchUp && !isPro;
 
   useEffect(() => {
-    if (!isPro || !profile?.garminConnected || loading || todays.length === 0) return;
-    void pushUpcomingGarminWorkouts(sessions, profile, { daysAhead: 0, limit: 4 }).then((results) => {
+    if (!isPro || !profile?.appleHealthConnected || loading || todays.length === 0) return;
+    void pushUpcomingAppleWorkouts(todays, { daysAhead: 0, limit: 4 }).then(async (results) => {
+      for (const r of results.filter((x) => x.ok)) {
+        await markAppleScheduled(r.sessionId);
+      }
       if (results.some((r) => r.ok)) void refresh({ silent: true });
     });
-  }, [isPro, profile?.garminConnected, loading, todays, sessions, refresh]);
+  }, [isPro, profile?.appleHealthConnected, loading, todays, refresh, markAppleScheduled]);
 
   if (loading) {
     return (
@@ -55,7 +59,7 @@ export default function TodayScreen() {
   }
 
   return (
-    <Screen className="pt-14">
+    <Screen>
       <Text variant="label" className="mb-1">
         Today
       </Text>

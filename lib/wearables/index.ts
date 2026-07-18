@@ -1,4 +1,4 @@
-import { addDays, formatISO, parseISO } from 'date-fns';
+import { addDays, formatISO } from 'date-fns';
 import type { AthleteSession, UserProfile } from '@/lib/types';
 import * as Garmin from './garmin';
 import * as AppleHealth from './healthkit';
@@ -21,6 +21,11 @@ export async function getWearableStatus(profile?: UserProfile): Promise<Wearable
   return { garmin, apple, strava };
 }
 
+/**
+ * Push prescribed workouts OUT to devices the athlete can start
+ * (Apple Watch via WorkoutKit, Garmin when available).
+ * Does not post anything to Strava.
+ */
 export async function syncSessionToWearables(session: AthleteSession, profile?: UserProfile) {
   const status = await getWearableStatus(profile);
   const results: { id: WearableId; ok: boolean; detail?: string }[] = [];
@@ -41,7 +46,7 @@ export async function syncSessionToWearables(session: AthleteSession, profile?: 
   if (status.apple) {
     try {
       await AppleHealth.pushSessionToAppleHealth(session);
-      results.push({ id: 'apple', ok: true });
+      results.push({ id: 'apple', ok: true, detail: 'scheduled' });
     } catch (e) {
       results.push({
         id: 'apple',
@@ -51,19 +56,45 @@ export async function syncSessionToWearables(session: AthleteSession, profile?: 
     }
   }
 
-  if (status.strava && session.logStatus && session.logStatus !== 'missed') {
+  return results;
+}
+
+/** Schedule upcoming TriSync sessions to Apple Watch / Fitness. */
+export async function pushUpcomingAppleWorkouts(
+  sessions: AthleteSession[],
+  opts?: { daysAhead?: number; limit?: number }
+) {
+  const connected = await AppleHealth.isAppleHealthConnected();
+  if (!connected) return [];
+
+  const today = formatISO(new Date(), { representation: 'date' });
+  const end = formatISO(addDays(new Date(), opts?.daysAhead ?? 7), { representation: 'date' });
+  const limit = opts?.limit ?? 12;
+
+  const targets = sessions
+    .filter(
+      (s) =>
+        !s.appleWorkoutScheduled &&
+        s.discipline !== 'rest' &&
+        s.scheduledDate >= today &&
+        s.scheduledDate <= end
+    )
+    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
+    .slice(0, limit);
+
+  const results: { sessionId: string; ok: boolean; detail?: string }[] = [];
+  for (const session of targets) {
     try {
-      const id = await Strava.pushSessionToStrava(session);
-      results.push({ id: 'strava', ok: true, detail: id });
+      await AppleHealth.pushSessionToAppleHealth(session);
+      results.push({ sessionId: session.id, ok: true, detail: 'scheduled' });
     } catch (e) {
       results.push({
-        id: 'strava',
+        sessionId: session.id,
         ok: false,
         detail: e instanceof Error ? e.message : 'Failed',
       });
     }
   }
-
   return results;
 }
 
@@ -112,6 +143,15 @@ export async function pushUpcomingGarminWorkouts(
   }
 
   return results;
+}
+
+/**
+ * Import activities the athlete posted on Strava and match them to TriSync sessions.
+ * Returns match list for the caller to apply logs.
+ */
+export async function pullStravaMatches(sessions: AthleteSession[]) {
+  const activities = await Strava.fetchRecentStravaActivities(21);
+  return Strava.matchStravaActivitiesToSessions(sessions, activities);
 }
 
 export { Garmin, AppleHealth, Strava };

@@ -87,6 +87,8 @@ export function materializeSessions(params: {
         loggedAt: null,
         simplified: false,
         garminWorkoutId: null,
+        stravaActivityId: null,
+        appleWorkoutScheduled: false,
       });
     }
   });

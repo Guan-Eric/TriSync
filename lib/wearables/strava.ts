@@ -1,9 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import type { AthleteSession } from '@/lib/types';
+import { subDays } from 'date-fns';
+import type { AthleteSession, Discipline, LogStatus } from '@/lib/types';
 import { getExtra } from '@/lib/config';
-import { sessionDetailText } from '@/lib/plans';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -13,6 +13,16 @@ type StravaTokens = {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
+};
+
+export type StravaActivity = {
+  id: number;
+  name: string;
+  type: string;
+  sport_type?: string;
+  start_date_local: string;
+  elapsed_time: number;
+  moving_time?: number;
 };
 
 function clientId() {
@@ -69,10 +79,14 @@ async function exchange(body: URLSearchParams) {
 
 export async function connectStrava() {
   if (!isStravaConfigured()) {
-    throw new Error('Set EXPO_PUBLIC_STRAVA_CLIENT_ID and EXPO_PUBLIC_STRAVA_CLIENT_SECRET.');
+    throw new Error('Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET in .env.');
   }
 
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'trisync', path: 'strava' });
+  // Strava's "Authorization Callback Domain" is a bare domain only (no scheme/path).
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: 'trisync',
+    native: 'trisync://localhost',
+  });
   const discovery = {
     authorizationEndpoint: 'https://www.strava.com/oauth/mobile/authorize',
     tokenEndpoint: 'https://www.strava.com/oauth/token',
@@ -81,7 +95,8 @@ export async function connectStrava() {
   const request = new AuthSession.AuthRequest({
     clientId: clientId(),
     redirectUri,
-    scopes: ['activity:write', 'activity:read'],
+    // Read-only: athlete posts on Strava; TriSync imports activities.
+    scopes: ['activity:read_all'],
     usePKCE: false,
     extraParams: { approval_prompt: 'auto' },
   });
@@ -89,6 +104,11 @@ export async function connectStrava() {
   const result = await request.promptAsync(discovery);
   if (result.type !== 'success' || !result.params.code) {
     throw new Error('Strava authorization was cancelled.');
+  }
+
+  const granted = String(result.params.scope ?? '');
+  if (!granted.includes('activity:read') && !granted.includes('read')) {
+    throw new Error('Strava did not grant activity read access. Reconnect and allow activity access.');
   }
 
   await exchange(
@@ -123,47 +143,83 @@ async function getAccessToken() {
   }
 }
 
-function stravaSport(discipline: AthleteSession['discipline']) {
-  switch (discipline) {
-    case 'swim':
-      return 'Swim';
-    case 'bike':
-      return 'Ride';
-    case 'run':
-      return 'Run';
-    case 'brick':
-      return 'Workout';
-    default:
-      return 'Workout';
+function mapStravaType(type: string, sportType?: string): Discipline | null {
+  const key = (sportType || type || '').toLowerCase();
+  if (key.includes('swim')) return 'swim';
+  if (key.includes('ride') || key.includes('cycle') || key.includes('bike')) return 'bike';
+  if (key.includes('run') || key.includes('walk') || key.includes('hike')) return 'run';
+  if (key.includes('workout') || key.includes('multisport') || key.includes('triathlon')) {
+    return 'brick';
   }
+  return null;
 }
 
-/** Creates a manual Strava activity from a completed session (v1 write path). */
-export async function pushSessionToStrava(session: AthleteSession) {
+function activityDateKey(startDateLocal: string) {
+  // Strava local start is ISO-like; take calendar date.
+  return startDateLocal.slice(0, 10);
+}
+
+/** Fetches recent activities the athlete posted on Strava (no writes). */
+export async function fetchRecentStravaActivities(daysBack = 14): Promise<StravaActivity[]> {
   const accessToken = await getAccessToken();
-  const start = `${session.scheduledDate}T08:00:00Z`;
-  const body = new URLSearchParams({
-    name: session.title,
-    type: stravaSport(session.discipline),
-    sport_type: stravaSport(session.discipline),
-    start_date_local: start,
-    elapsed_time: String((session.durationMinutes || 30) * 60),
-    description: `${sessionDetailText(session)}\n\nLogged with TriSync`,
-  });
-
-  const res = await fetch('https://www.strava.com/api/v3/activities', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
-
+  const after = Math.floor(subDays(new Date(), daysBack).getTime() / 1000);
+  const res = await fetch(
+    `https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=50`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (res.status === 401 || res.status === 403) {
+    await disconnectStrava();
+    throw new Error('Strava session expired. Reconnect in Settings.');
+  }
   if (!res.ok) {
-    throw new Error(`Strava activity create failed (${res.status}): ${await res.text()}`);
+    throw new Error(`Strava activity sync failed (${res.status}): ${await res.text()}`);
+  }
+  return (await res.json()) as StravaActivity[];
+}
+
+export type StravaMatch = {
+  sessionId: string;
+  activityId: string;
+  logStatus: Exclude<LogStatus, null>;
+};
+
+/**
+ * Match Strava activities to unlogged TriSync sessions by date + discipline.
+ * Caller applies the logs — TriSync never posts activities to Strava.
+ */
+export function matchStravaActivitiesToSessions(
+  sessions: AthleteSession[],
+  activities: StravaActivity[]
+): StravaMatch[] {
+  const usedActivities = new Set<number>();
+  const matches: StravaMatch[] = [];
+
+  const candidates = sessions
+    .filter((s) => s.discipline !== 'rest' && s.logStatus == null && !s.stravaActivityId)
+    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+
+  for (const session of candidates) {
+    const match = activities.find((activity) => {
+      if (usedActivities.has(activity.id)) return false;
+      const discipline = mapStravaType(activity.type, activity.sport_type);
+      if (!discipline || discipline !== session.discipline) return false;
+      return activityDateKey(activity.start_date_local) === session.scheduledDate;
+    });
+    if (!match) continue;
+    usedActivities.add(match.id);
+    matches.push({
+      sessionId: session.id,
+      activityId: String(match.id),
+      logStatus: 'on_target',
+    });
   }
 
-  const json = (await res.json()) as { id?: number };
-  return String(json.id ?? '');
+  return matches;
+}
+
+/** @deprecated TriSync no longer posts to Strava — use fetch + match instead. */
+export async function pushSessionToStrava(_session: AthleteSession): Promise<string> {
+  throw new Error(
+    'TriSync does not post to Strava. Connect Strava and use Sync to import activities you logged there.'
+  );
 }

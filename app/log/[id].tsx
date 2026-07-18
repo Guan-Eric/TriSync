@@ -23,7 +23,7 @@ export default function LogScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
-  const { log } = useSessions();
+  const { log, markAppleScheduled, syncFromStrava } = useSessions();
   const [session, setSession] = useState<AthleteSession | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -41,9 +41,8 @@ export default function LogScreen() {
     );
   }
 
-  const canSync =
-    isPro &&
-    (profile?.garminConnected || profile?.appleHealthConnected || profile?.stravaConnected);
+  const canSendApple = isPro && (profile?.appleHealthConnected || false);
+  const canSyncStrava = isPro && (profile?.stravaConnected || false);
   const prescriptionLocked = !isPro && session.weekNumber > 1;
   const blocks = session.blocks?.length ? session.blocks : null;
 
@@ -59,6 +58,8 @@ export default function LogScreen() {
           {format(parseISO(session.scheduledDate), 'EEEE, MMM d')} · {session.durationMinutes} min
           {!prescriptionLocked && session.intensityLabel ? ` · ${session.intensityLabel}` : ''}
           {session.simplified ? ' · Catch-up simplified' : ''}
+          {session.stravaActivityId ? ' · Synced from Strava' : ''}
+          {session.appleWorkoutScheduled ? ' · On Apple Watch' : ''}
         </Text>
 
         {prescriptionLocked ? (
@@ -135,17 +136,6 @@ export default function LogScreen() {
                 try {
                   setBusy(true);
                   await log(session.id, opt.id);
-                  const updated = { ...session, logStatus: opt.id };
-                  if (canSync && opt.id !== 'missed') {
-                    const results = await syncSessionToWearables(updated, profile ?? undefined);
-                    const failed = results.filter((r) => !r.ok);
-                    if (failed.length) {
-                      Alert.alert(
-                        'Logged — sync issues',
-                        failed.map((f) => `${f.id}: ${f.detail}`).join('\n')
-                      );
-                    }
-                  }
                   router.back();
                 } catch (e: unknown) {
                   Alert.alert('Log failed', e instanceof Error ? e.message : 'Unknown error');
@@ -156,26 +146,53 @@ export default function LogScreen() {
             />
           ))}
 
-          {canSync ? (
+          {canSendApple && !prescriptionLocked ? (
             <Button
-              title="Push workout to devices"
+              title="Send workout template to Apple Watch"
               variant="secondary"
               disabled={busy}
               onPress={async () => {
                 try {
                   setBusy(true);
                   const results = await syncSessionToWearables(session, profile ?? undefined);
-                  const ok = results.filter((r) => r.ok).map((r) => r.id);
-                  const failed = results.filter((r) => !r.ok);
-                  Alert.alert(
-                    'Sync',
-                    [
-                      ok.length ? `Sent: ${ok.join(', ')}` : 'Nothing sent',
-                      ...failed.map((f) => `${f.id}: ${f.detail}`),
-                    ].join('\n')
-                  );
+                  const apple = results.find((r) => r.id === 'apple');
+                  if (apple?.ok) {
+                    await markAppleScheduled(session.id);
+                    setSession({ ...session, appleWorkoutScheduled: true });
+                    Alert.alert(
+                      'Sent to Apple Watch',
+                      'Open the Workout or Fitness app to start this session from your watch or phone.'
+                    );
+                  } else {
+                    Alert.alert('Apple Watch', apple?.detail ?? 'Could not schedule workout.');
+                  }
                 } catch (e: unknown) {
                   Alert.alert('Sync failed', e instanceof Error ? e.message : 'Unknown error');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          ) : null}
+
+          {canSyncStrava ? (
+            <Button
+              title="Sync this week from Strava"
+              variant="ghost"
+              disabled={busy}
+              onPress={async () => {
+                try {
+                  setBusy(true);
+                  const count = await syncFromStrava();
+                  Alert.alert(
+                    'Strava',
+                    count
+                      ? `Matched ${count} session${count === 1 ? '' : 's'} from Strava.`
+                      : 'No new matching activities found.'
+                  );
+                  if (user && id) setSession(await getSession(user.uid, id));
+                } catch (e: unknown) {
+                  Alert.alert('Strava sync failed', e instanceof Error ? e.message : 'Unknown error');
                 } finally {
                   setBusy(false);
                 }

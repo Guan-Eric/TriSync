@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.trisync.app</string>
+	<string>com.guan-eric.trisync</string>
 	<key>PROJECT_ID</key>
 	<string>trisync-app</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:1057530045178:ios:59a2fc858c4de8ce055f43</string>
+	<string>1:1057530045178:ios:770507b5952b6092055f43</string>
 </dict>
 </plist>

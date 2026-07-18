@@ -39,7 +39,7 @@ export default function WeekScreen() {
   const hasAny = days.some((d) => d.sessions.length > 0);
 
   return (
-    <Screen className="pt-14">
+    <Screen>
       <Text variant="label" className="mb-1">
         This week
       </Text>

@@ -5,6 +5,7 @@ import {
   getUserProfile,
   listSessions,
   logSession,
+  markAppleWorkoutScheduled,
   patchUserProfile,
   rescheduleSession,
   updateRaceSettings,
@@ -15,7 +16,7 @@ import {
   nextSessionsToSimplify,
   simplifyPrescription,
 } from './plans';
-import { pushUpcomingGarminWorkouts } from './wearables';
+import { pullStravaMatches, pushUpcomingGarminWorkouts } from './wearables';
 import type {
   AthleteSession,
   EquipmentAccess,
@@ -43,6 +44,9 @@ type SessionsContextValue = {
   applyCatchUpPlan: () => Promise<void>;
   dismissCatchUp: () => Promise<void>;
   updateRace: (input: RaceSettingsInput) => Promise<void>;
+  /** Import activities from Strava into matching TriSync sessions. */
+  syncFromStrava: () => Promise<number>;
+  markAppleScheduled: (sessionId: string) => Promise<void>;
 };
 
 const SessionsContext = createContext<SessionsContextValue | undefined>(undefined);
@@ -144,6 +148,29 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
     [user, refreshProfile, refresh]
   );
 
+  const syncFromStrava = useCallback(async () => {
+    if (!user) return 0;
+    const matches = await pullStravaMatches(sessions);
+    for (const match of matches) {
+      await logSession(user.uid, match.sessionId, match.logStatus, {
+        stravaActivityId: match.activityId,
+      });
+    }
+    if (matches.length) await refresh();
+    return matches.length;
+  }, [user, sessions, refresh]);
+
+  const markAppleScheduled = useCallback(
+    async (sessionId: string) => {
+      if (!user) return;
+      await markAppleWorkoutScheduled(user.uid, sessionId);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, appleWorkoutScheduled: true } : s))
+      );
+    },
+    [user]
+  );
+
   const value = useMemo(
     () => ({
       sessions,
@@ -156,6 +183,8 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       applyCatchUpPlan,
       dismissCatchUp,
       updateRace,
+      syncFromStrava,
+      markAppleScheduled,
     }),
     [
       sessions,
@@ -168,6 +197,8 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
       applyCatchUpPlan,
       dismissCatchUp,
       updateRace,
+      syncFromStrava,
+      markAppleScheduled,
     ]
   );
 

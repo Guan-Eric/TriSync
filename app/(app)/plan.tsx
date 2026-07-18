@@ -208,7 +208,7 @@ export default function PlanScreen() {
   };
 
   return (
-    <Screen className="pt-14">
+    <Screen>
       <Text variant="label" className="mb-1">
         Active plan
       </Text>

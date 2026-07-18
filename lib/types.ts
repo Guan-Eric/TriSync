@@ -90,4 +90,8 @@ export type AthleteSession = {
   loggedAt?: string | null;
   simplified?: boolean;
   garminWorkoutId?: string | null;
+  /** Set when a Strava activity was matched/imported into this session. */
+  stravaActivityId?: string | null;
+  /** True after this session was scheduled to Apple Watch via WorkoutKit. */
+  appleWorkoutScheduled?: boolean;
 };

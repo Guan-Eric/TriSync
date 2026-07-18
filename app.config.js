@@ -17,7 +17,7 @@ export default {
     userInterfaceStyle: 'light',
     newArchEnabled: true,
     platforms: ['ios'],
-    icon: './assets/images/icon.png',
+    icon: './assets/images/icon.jpg',
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.guan-eric.trisync',
@@ -30,9 +30,9 @@ export default {
           },
         ],
         NSHealthShareUsageDescription:
-          'TriSync reads workouts so your training log stays in sync with Apple Health and Apple Watch.',
+          'TriSync reads workouts from Apple Health so sessions you complete on Apple Watch can sync into your training log.',
         NSHealthUpdateUsageDescription:
-          'TriSync saves prescribed and completed triathlon sessions to Apple Health for your Apple Watch.',
+          'TriSync sends prescribed workout templates to Apple Health / Fitness so you can start them from iPhone or Apple Watch.',
       },
     },
     web: {
@@ -49,15 +49,15 @@ export default {
         '@kingstinct/react-native-healthkit',
         {
           NSHealthShareUsageDescription:
-            'TriSync reads workouts so your training log stays in sync with Apple Health and Apple Watch.',
+            'TriSync reads workouts from Apple Health so sessions you complete on Apple Watch can sync into your training log.',
           NSHealthUpdateUsageDescription:
-            'TriSync saves prescribed and completed triathlon sessions to Apple Health for your Apple Watch.',
+            'TriSync sends prescribed workout templates to Apple Health / Fitness so you can start them from iPhone or Apple Watch.',
         },
       ],
       [
         'expo-splash-screen',
         {
-          image: './assets/images/splash-icon.png',
+          image: './assets/images/icon.jpg',
           resizeMode: 'contain',
           backgroundColor: '#ecebe8',
         },

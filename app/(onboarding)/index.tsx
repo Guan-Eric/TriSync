@@ -137,7 +137,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <Screen>
+    <Screen safeBottom>
       <Text variant="label" className="mb-2">
         Step {step + 1} of 5
       </Text>

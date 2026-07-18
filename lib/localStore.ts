@@ -25,8 +25,8 @@ export const useLocalData =
   !getExtra('firebaseApiKey') ||
   getExtra('firebaseApiKey') === 'demo-api-key';
 
-export function shouldUseLocal(uid?: string | null) {
-  return useLocalData || uid === 'demo-athlete';
+export function shouldUseLocal(_uid?: string | null) {
+  return useLocalData;
 }
 
 export async function localEnsureProfile(uid: string, partial?: Partial<UserProfile>) {
@@ -225,10 +225,30 @@ export async function localGetSession(uid: string, sessionId: string) {
   return sessions.find((s) => s.id === sessionId) ?? null;
 }
 
-export async function localLogSession(uid: string, sessionId: string, logStatus: LogStatus) {
+export async function localLogSession(
+  uid: string,
+  sessionId: string,
+  logStatus: LogStatus,
+  extra?: { stravaActivityId?: string }
+) {
   const sessions = await localListSessions(uid);
   const next = sessions.map((s) =>
-    s.id === sessionId ? { ...s, logStatus, loggedAt: formatISO(new Date()) } : s
+    s.id === sessionId
+      ? {
+          ...s,
+          logStatus,
+          loggedAt: formatISO(new Date()),
+          ...(extra?.stravaActivityId ? { stravaActivityId: extra.stravaActivityId } : {}),
+        }
+      : s
+  );
+  await AsyncStorage.setItem(KEYS.sessions(uid), JSON.stringify(next));
+}
+
+export async function localMarkAppleWorkoutScheduled(uid: string, sessionId: string) {
+  const sessions = await localListSessions(uid);
+  const next = sessions.map((s) =>
+    s.id === sessionId ? { ...s, appleWorkoutScheduled: true } : s
   );
   await AsyncStorage.setItem(KEYS.sessions(uid), JSON.stringify(next));
 }

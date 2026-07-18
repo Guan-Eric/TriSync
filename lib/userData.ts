@@ -21,6 +21,7 @@ import {
   localGetSession,
   localListSessions,
   localLogSession,
+  localMarkAppleWorkoutScheduled,
   localPatchProfile,
   localGetActiveEnrollment,
   localRescheduleSession,
@@ -263,11 +264,24 @@ export async function getSession(uid: string, sessionId: string) {
   return snap.exists() ? (snap.data() as AthleteSession) : null;
 }
 
-export async function logSession(uid: string, sessionId: string, logStatus: LogStatus) {
-  if (shouldUseLocal(uid)) return localLogSession(uid, sessionId, logStatus);
+export async function logSession(
+  uid: string,
+  sessionId: string,
+  logStatus: LogStatus,
+  extra?: { stravaActivityId?: string }
+) {
+  if (shouldUseLocal(uid)) return localLogSession(uid, sessionId, logStatus, extra);
   await updateDoc(doc(db, 'users', uid, 'sessions', sessionId), {
     logStatus,
     loggedAt: formatISO(new Date()),
+    ...(extra?.stravaActivityId ? { stravaActivityId: extra.stravaActivityId } : {}),
+  });
+}
+
+export async function markAppleWorkoutScheduled(uid: string, sessionId: string) {
+  if (shouldUseLocal(uid)) return localMarkAppleWorkoutScheduled(uid, sessionId);
+  await updateDoc(doc(db, 'users', uid, 'sessions', sessionId), {
+    appleWorkoutScheduled: true,
   });
 }
 
