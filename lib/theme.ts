@@ -1,0 +1,21 @@
+/** Hex tokens for RN APIs that can't use Tailwind class names (gradients, indicators, tabs). */
+export const colors = {
+  background: '#fff4ef',
+  foreground: '#1a1210',
+  card: '#ffffff',
+  muted: '#ffe4d6',
+  mutedForeground: '#7a5348',
+  border: '#f0c4b0',
+  primary: '#ff3d2e',
+  primaryDark: '#e02418',
+  primarySoft: '#ff6b4a',
+  primaryForeground: '#fffaf8',
+  accent: '#1a1210',
+  accentForeground: '#fff4ef',
+  swim: '#0ea5e9',
+  bike: '#f97316',
+  run: '#22c55e',
+  brick: '#6366f1',
+  destructive: '#dc2626',
+  success: '#16a34a',
+} as const;

@@ -11,6 +11,7 @@ import type { AthleteSession, LogStatus } from '@/lib/types';
 import { Screen, Card, DisciplineBadge } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
+import { colors } from '@/lib/theme';
 
 const options: { id: Exclude<LogStatus, null>; label: string; hint: string }[] = [
   { id: 'easy', label: 'Felt easy', hint: 'Could have done more' },
@@ -36,7 +37,7 @@ export default function LogScreen() {
     return (
       <Screen className="items-center justify-center">
         <Stack.Screen options={{ title: 'Session' }} />
-        <ActivityIndicator color="#e23d28" />
+        <ActivityIndicator color={colors.primary} />
       </Screen>
     );
   }

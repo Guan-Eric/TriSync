@@ -41,7 +41,7 @@ Dev builds prefer `REVENUECAT_TEST_API_KEY` when set. EAS production builds must
 
 ## Optional polish
 
-1. **Paywall template** — Create a paywall in RevenueCat for `default` (calm copy, no urgency). Until then, the app falls back to a native package list.
+1. **Paywall template** — Optional. The app uses a native package list (`purchasePackage`), not `RevenueCatUI.Paywall`, so a dashboard paywall is not required for purchases to work. If you later create a paywall for `default` in RevenueCat, you can switch the screen to `RevenueCatUI.Paywall`.
 2. **Customer Center** — Configure self-service actions (manage, restore, support) in RevenueCat dashboard.
 
 ## App behavior

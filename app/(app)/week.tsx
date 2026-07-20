@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { SessionRow } from '@/components/SessionRow';
 import type { AthleteSession } from '@/lib/types';
+import { colors } from '@/lib/theme';
 
 export default function WeekScreen() {
   useRefreshOnFocus();
@@ -31,7 +32,7 @@ export default function WeekScreen() {
   if (loading) {
     return (
       <Screen className="items-center justify-center">
-        <ActivityIndicator color="#e23d28" />
+        <ActivityIndicator color={colors.primary} />
       </Screen>
     );
   }
@@ -51,19 +52,21 @@ export default function WeekScreen() {
       </Text>
 
       <ScrollView contentContainerClassName="gap-5 pb-10">
-        {days.map((day) => (
+        {days.map((day, dayIndex) => (
           <View key={day.key} className="gap-2">
             <Text variant="label">{format(day.date, 'EEEE, MMM d')}</Text>
             {day.sessions.length === 0 ? (
               <Text variant="caption">Rest / mobility</Text>
             ) : (
-              day.sessions.map((session: AthleteSession) => {
+              day.sessions.map((session: AthleteSession, sessionIndex) => {
                 const locked = !isPro && session.weekNumber > 1;
+                const index = dayIndex * 2 + sessionIndex;
                 return (
                   <View key={session.id} className="gap-1">
                     <SessionRow
                       session={session}
                       locked={locked}
+                      index={index}
                       onPress={() => router.push(`/log/${session.id}`)}
                     />
                     {locked ? (

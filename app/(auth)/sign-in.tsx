@@ -12,6 +12,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
+import { colors } from '@/lib/theme';
+import { Animated, heroEntering, riseEntering } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 
@@ -41,7 +43,7 @@ export default function SignInScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator color="#e23d28" />
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
@@ -61,28 +63,36 @@ export default function SignInScreen() {
         contentContainerStyle={{ flexGrow: 1 }}
         bounces={false}
       >
-        <LinearGradient
-          colors={['#141414', '#1f1f1f', '#2a2a2a']}
-          locations={[0, 0.55, 1]}
-          style={{ paddingHorizontal: 24, paddingTop: 72, paddingBottom: 28, minHeight: 220 }}
-        >
-          <View
-            style={{
-              width: 48,
-              height: 4,
-              backgroundColor: '#e23d28',
-              marginBottom: 24,
-            }}
-          />
-          <Text className="mb-3 text-5xl text-white" variant="display">
-            TriSync
-          </Text>
-          <Text className="max-w-[320px] text-lg leading-7 text-white">
-            Swim. Bike. Run. One plan that treats triathlon as one sport.
-          </Text>
-        </LinearGradient>
+        <Animated.View entering={heroEntering}>
+          <LinearGradient
+            colors={[colors.primaryDark, colors.primary, colors.primarySoft, '#ffb347']}
+            locations={[0, 0.35, 0.7, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ paddingHorizontal: 24, paddingTop: 72, paddingBottom: 28, minHeight: 220 }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 4,
+                backgroundColor: '#ffffff',
+                marginBottom: 24,
+              }}
+            />
+            <Text className="mb-3 text-5xl text-white" variant="display">
+              TriSync
+            </Text>
+            <Text className="max-w-[320px] text-lg leading-7 text-white">
+              Swim. Bike. Run. One plan that treats triathlon as one sport.
+            </Text>
+          </LinearGradient>
+        </Animated.View>
 
-        <View className="bg-background px-6 pb-12 pt-7" style={{ gap: 12 }}>
+        <Animated.View
+          entering={riseEntering.delay(100)}
+          className="bg-background px-6 pb-12 pt-7"
+          style={{ gap: 12 }}
+        >
           <Text className="mb-1 text-sm text-muted-foreground">
             Structure without the coach price tag.
           </Text>
@@ -91,11 +101,11 @@ export default function SignInScreen() {
             <Pressable
               onPress={() => setMode('signUp')}
               className={`flex-1 items-center rounded-xl py-2.5 ${
-                mode === 'signUp' ? 'bg-foreground' : 'bg-muted'
+                mode === 'signUp' ? 'bg-primary' : 'bg-muted'
               }`}
             >
               <Text
-                className={mode === 'signUp' ? 'text-white' : 'text-foreground'}
+                className={mode === 'signUp' ? 'text-primary-foreground' : 'text-foreground'}
                 style={{ fontFamily: 'Barlow_600SemiBold' }}
               >
                 Create account
@@ -104,11 +114,11 @@ export default function SignInScreen() {
             <Pressable
               onPress={() => setMode('signIn')}
               className={`flex-1 items-center rounded-xl py-2.5 ${
-                mode === 'signIn' ? 'bg-foreground' : 'bg-muted'
+                mode === 'signIn' ? 'bg-primary' : 'bg-muted'
               }`}
             >
               <Text
-                className={mode === 'signIn' ? 'text-white' : 'text-foreground'}
+                className={mode === 'signIn' ? 'text-primary-foreground' : 'text-foreground'}
                 style={{ fontFamily: 'Barlow_600SemiBold' }}
               >
                 Sign in
@@ -189,7 +199,7 @@ export default function SignInScreen() {
               />
             </>
           ) : null}
-        </View>
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );

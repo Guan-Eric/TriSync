@@ -9,14 +9,17 @@ export function SessionRow({
   session,
   locked,
   onPress,
+  index = 0,
 }: {
   session: AthleteSession;
   locked?: boolean;
   onPress?: () => void;
+  /** Used to stagger enter animation in lists. */
+  index?: number;
 }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress}>
-      <Card className={locked ? 'opacity-50' : undefined}>
+      <Card className={locked ? 'opacity-50' : undefined} enterDelay={Math.min(index, 8) * 55}>
         <View className="mb-2 flex-row items-center justify-between">
           <DisciplineBadge discipline={session.discipline} />
           <Text variant="caption">

@@ -13,6 +13,7 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { SessionRow } from '@/components/SessionRow';
 import { CatchUpSheet } from '@/components/CatchUpSheet';
+import { colors } from '@/lib/theme';
 
 export default function TodayScreen() {
   useRefreshOnFocus();
@@ -53,7 +54,7 @@ export default function TodayScreen() {
   if (loading) {
     return (
       <Screen className="items-center justify-center">
-        <ActivityIndicator color="#e23d28" />
+        <ActivityIndicator color={colors.primary} />
       </Screen>
     );
   }
@@ -81,17 +82,18 @@ export default function TodayScreen() {
             </Text>
           </Card>
         ) : (
-          todays.map((session) => {
+          todays.map((session, i) => {
             const locked = !isPro && session.weekNumber > 1;
             return (
               <View key={session.id} className="gap-2">
                 <SessionRow
                   session={session}
                   locked={locked}
+                  index={i}
                   onPress={() => router.push(`/log/${session.id}`)}
                 />
                 {!locked ? (
-                  <Card className="bg-muted/60">
+                  <Card className="bg-muted/60" enterDelay={i * 55 + 40}>
                     <Text variant="label" className="mb-1">
                       Why this matters
                     </Text>
@@ -100,7 +102,6 @@ export default function TodayScreen() {
                 ) : (
                   <Button
                     title="Unlock full prescription"
-                    variant="ghost"
                     onPress={() => router.push('/paywall')}
                   />
                 )}
@@ -112,15 +113,14 @@ export default function TodayScreen() {
         {!isPro ? (
           <Button
             title="Unlock full plan"
-            variant="secondary"
             onPress={() => router.push('/paywall')}
             className="mt-2"
           />
         ) : null}
 
         {showCatchUpUpgrade ? (
-          <Card className="mt-2">
-            <Text variant="label" className="mb-1">
+          <Card className="mt-2 border-primary/30 bg-primary/10">
+            <Text variant="label" className="mb-1 text-primary">
               Adaptive catch-up
             </Text>
             <Text className="mb-2 font-semibold">Rough week — Pro can rebalance</Text>

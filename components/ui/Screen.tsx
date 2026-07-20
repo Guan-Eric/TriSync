@@ -2,13 +2,14 @@ import { View, type ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cn } from '@/lib/cn';
 import type { Discipline } from '@/lib/types';
+import { Animated, cardEntering, screenEntering } from '@/lib/motion';
 import { Text } from './Text';
 
 const disciplineStyles: Record<Discipline, string> = {
-  swim: 'bg-swim/15 text-swim',
-  bike: 'bg-bike/15 text-bike',
-  run: 'bg-run/15 text-run',
-  brick: 'bg-brick/15 text-brick',
+  swim: 'bg-swim/25 text-swim',
+  bike: 'bg-bike/25 text-bike',
+  run: 'bg-run/25 text-run',
+  brick: 'bg-brick/25 text-brick',
   rest: 'bg-muted text-muted-foreground',
 };
 
@@ -28,36 +29,67 @@ type ScreenProps = ViewProps & {
   safeTop?: boolean;
   /** Include bottom home-indicator inset. Default false (tab bar screens). */
   safeBottom?: boolean;
+  /** Fade/slide content in on mount. Default true. */
+  animate?: boolean;
 };
 
 export function Screen({
   className,
   safeTop = true,
   safeBottom = false,
+  animate = true,
   style,
   ...props
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const padStyle = {
+    paddingTop: safeTop ? Math.max(insets.top, 8) + 8 : 16,
+    paddingBottom: safeBottom ? Math.max(insets.bottom, 8) : 0,
+  };
+
+  if (!animate) {
+    return (
+      <View
+        className={cn('flex-1 bg-background px-5', className)}
+        style={[padStyle, style]}
+        {...props}
+      />
+    );
+  }
 
   return (
-    <View
+    <Animated.View
+      entering={screenEntering}
       className={cn('flex-1 bg-background px-5', className)}
-      style={[
-        {
-          paddingTop: safeTop ? Math.max(insets.top, 8) + 8 : 16,
-          paddingBottom: safeBottom ? Math.max(insets.bottom, 8) : 0,
-        },
-        style,
-      ]}
+      style={[padStyle, style]}
       {...props}
     />
   );
 }
 
-export function Card({ className, ...props }: ViewProps & { className?: string }) {
+type CardProps = ViewProps & {
+  className?: string;
+  /** Stagger delay in ms for list enter animations. */
+  enterDelay?: number;
+  /** Disable enter animation. Default false (animates). */
+  animate?: boolean;
+};
+
+export function Card({ className, enterDelay = 0, animate = true, style, ...props }: CardProps) {
+  const shared = cn(
+    'rounded-2xl border border-border bg-card p-4 shadow-sm shadow-primary/10',
+    className
+  );
+
+  if (!animate) {
+    return <View className={shared} style={style} {...props} />;
+  }
+
   return (
-    <View
-      className={cn('rounded-2xl border border-border bg-card p-4', className)}
+    <Animated.View
+      entering={cardEntering(enterDelay)}
+      className={shared}
+      style={style}
       {...props}
     />
   );

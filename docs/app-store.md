@@ -24,6 +24,31 @@ Products are created and priced in App Store Connect via RevenueCat:
 
 Subscription group: **TriSync Pro**
 
+### Resubmit after July 20, 2026 rejection (2.1(b) + 5.1.1(v))
+
+Apple rejected because (1) the plan/paywall showed an IAP error, (2) IAPs were not attached to the version for review, and (3) account deletion was missing in-app.
+
+**App Store Connect (required before upload):**
+
+1. Confirm **Paid Apps Agreement** + banking/tax are Active (Business → Agreements).
+2. Set a public **privacy policy URL** on both auto-renewable subscriptions.
+3. On the new app version → **In-App Purchases and Subscriptions** → add `trisync_weekly` and `trisync_yearly`.
+4. Upload an **App Review screenshot** for each IAP (required metadata to submit IAPs).
+5. Submit the **version + both IAPs together** (first IAP cannot go alone).
+
+**Binary / sandbox:**
+
+1. Production EAS secret must include `REVENUECAT_API_KEY` (`appl_…`), not only the Test Store key.
+2. Verify on a physical **iPhone and iPad** (sandbox): paywall shows weekly + yearly, purchase grants `pro`, restore works.
+3. In App Review notes: demo account + short note that subscriptions are sandbox-ready.
+
+**In-app (shipped in this codebase):**
+
+- Settings → **Delete account** (confirm → reauth → wipe Firestore/local data → Auth delete; Apple token revoke when applicable).
+- Paywall empty/error state with **Try again**, plus Privacy / Terms links.
+
+After approval, reply to App Review with a device screen recording of: sign-in → Settings → Delete account → confirmation.
+
 ### First submission (required)
 
 Apple will not approve the first IAP alone. On your **first version** submit:
@@ -51,7 +76,7 @@ Third-party: Strava OAuth (import activities you post — TriSync does not post 
 2. Week — swim/bike/run/brick
 3. Onboarding — distance selection
 4. Paywall — weekly trial + yearly (no fake urgency)
-5. Settings — wearable sync
+5. Settings — wearable sync + Delete account
 
 ## TestFlight
 

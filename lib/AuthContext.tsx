@@ -7,13 +7,17 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
   OAuthProvider,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
+  revokeAccessToken,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { auth } from './firebase';
-import { ensureUserProfile, getUserProfile } from './userData';
+import { deleteAllUserData, ensureUserProfile, getUserProfile } from './userData';
 import { loginRevenueCat, logoutRevenueCat, configureRevenueCat } from './revenuecat';
 import type { UserProfile } from './types';
 
@@ -28,6 +32,7 @@ type AuthContextValue = {
   signInWithEmail: (email: string, password: string) => Promise<AuthDestination>;
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<AuthDestination>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -66,6 +71,8 @@ function mapAuthError(e: unknown): Error {
       return new Error('Network error. Check your connection and try again.');
     case 'auth/operation-not-allowed':
       return new Error('Email sign-in is not enabled yet. Enable Email/Password in Firebase Auth.');
+    case 'auth/requires-recent-login':
+      return new Error('For security, confirm your identity again, then retry account deletion.');
     default:
       return e instanceof Error ? e : new Error(message);
   }
@@ -213,6 +220,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   };
 
+  const promptPassword = () =>
+    new Promise<string | null>((resolve) => {
+      if (Platform.OS === 'ios') {
+        Alert.prompt(
+          'Confirm password',
+          'Enter your password to permanently delete your account.',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+            { text: 'Continue', onPress: (value?: string) => resolve(value ?? null) },
+          ],
+          'secure-text'
+        );
+        return;
+      }
+      Alert.alert(
+        'Confirm password',
+        'Re-open Settings after signing in again if deletion requires a recent login.',
+        [{ text: 'OK', onPress: () => resolve(null) }]
+      );
+    });
+
+  const reauthenticateForDeletion = async (current: User): Promise<string | null> => {
+    const isApple = current.providerData.some((p) => p.providerId === 'apple.com');
+    if (isApple) {
+      const { raw, hashed } = await nonce();
+      const apple = await AppleAuthentication.signInAsync({
+        requestedScopes: [],
+        nonce: hashed,
+      });
+      if (!apple.identityToken) throw new Error('Apple confirmation failed. Try again.');
+      const provider = new OAuthProvider('apple.com');
+      const credential = provider.credential({
+        idToken: apple.identityToken,
+        rawNonce: raw,
+      });
+      await reauthenticateWithCredential(current, credential);
+      return apple.authorizationCode;
+    }
+
+    const email = current.email;
+    if (!email) throw new Error('Re-sign in, then try deleting your account again.');
+    const password = await promptPassword();
+    if (!password) throw new Error('Account deletion cancelled.');
+    const credential = EmailAuthProvider.credential(email, password);
+    await reauthenticateWithCredential(current, credential);
+    return null;
+  };
+
+  const deleteAccount = async () => {
+    const current = auth.currentUser;
+    if (!current) throw new Error('Sign in to delete your account.');
+
+    let appleAuthCode: string | null = null;
+    try {
+      appleAuthCode = await reauthenticateForDeletion(current);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes('ERR_REQUEST_CANCELED') || message.includes('cancelled')) {
+        throw new Error('Account deletion cancelled.');
+      }
+      throw mapAuthError(e);
+    }
+
+    await deleteAllUserData(current.uid);
+
+    if (appleAuthCode) {
+      await revokeAccessToken(auth, appleAuthCode).catch((e) => {
+        console.warn('[auth] Apple token revoke failed', e);
+      });
+    }
+
+    await deleteUser(current);
+    await logoutRevenueCat().catch(() => undefined);
+    setUser(null);
+    setProfile(null);
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -223,6 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithEmail,
       signUpWithEmail,
       signOut,
+      deleteAccount,
     }),
     [user, profile, loading, refreshProfile, finishSession]
   );

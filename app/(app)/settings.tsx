@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/Button';
 
 export default function SettingsScreen() {
   useRefreshOnFocus();
-  const { user, profile, signOut, refreshProfile } = useAuth();
+  const { user, profile, signOut, refreshProfile, deleteAccount } = useAuth();
   const { isPro, refresh } = useSubscription();
   const { syncFromStrava, markAppleScheduled, refresh: refreshSessions } = useSessions();
   const [busy, setBusy] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export default function SettingsScreen() {
       </Text>
 
       <ScrollView contentContainerClassName="gap-3 pb-10">
-        <Card>
+        <Card enterDelay={40}>
           <Text className="font-semibold">{profile?.displayName || 'Athlete'}</Text>
           <Text variant="caption">{user?.email || user?.uid}</Text>
           <Text variant="caption" className="mt-2">
@@ -100,7 +100,7 @@ export default function SettingsScreen() {
           ) : null}
         </Card>
 
-        <Card>
+        <Card enterDelay={100}>
           <Text className="mb-1 text-lg font-semibold">Subscription</Text>
           <Text variant="caption" className="mb-4">
             Weekly includes a 7-day trial. Yearly fits a full training cycle. No fake urgency — cancel
@@ -132,7 +132,7 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        <Card>
+        <Card enterDelay={160}>
           <Text className="mb-1 text-lg font-semibold">Devices & sync</Text>
           <Text variant="caption" className="mb-4">
             Send workout templates to Apple Watch, and import activities you post on Strava. Garmin
@@ -279,9 +279,44 @@ export default function SettingsScreen() {
         <Button
           title="Sign out"
           variant="ghost"
+          disabled={busy !== null}
           onPress={async () => {
             await signOut();
             router.replace('/(auth)/sign-in');
+          }}
+        />
+        <Button
+          title={busy === 'delete' ? 'Deleting…' : 'Delete account'}
+          variant="ghost"
+          disabled={busy !== null}
+          onPress={() => {
+            Alert.alert(
+              'Delete account?',
+              'This permanently deletes your TriSync profile, training plan, and session history. Subscriptions are managed separately in the App Store.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    void (async () => {
+                      try {
+                        setBusy('delete');
+                        await deleteAccount();
+                        router.replace('/(auth)/sign-in');
+                      } catch (e: unknown) {
+                        const message = e instanceof Error ? e.message : 'Could not delete account';
+                        if (!message.toLowerCase().includes('cancelled')) {
+                          Alert.alert('Delete account', message);
+                        }
+                      } finally {
+                        setBusy(null);
+                      }
+                    })();
+                  },
+                },
+              ]
+            );
           }}
         />
       </ScrollView>

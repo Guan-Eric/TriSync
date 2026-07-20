@@ -2,23 +2,23 @@
 @import 'uniwind';
 
 @theme {
-  /* Athletic / race-day — concrete, asphalt, vermillion. Not spa teal. */
-  --color-background: #ecebe8;
-  --color-foreground: #141414;
-  --color-card: #f7f6f3;
-  --color-muted: #dddcd7;
-  --color-muted-foreground: #5c5a55;
-  --color-border: #c9c7c1;
-  --color-primary: #e23d28;
+  /* Race-day energy — hot vermillion, warm sand, loud swim/bike/run. */
+  --color-background: #fff4ef;
+  --color-foreground: #1a1210;
+  --color-card: #ffffff;
+  --color-muted: #ffe4d6;
+  --color-muted-foreground: #7a5348;
+  --color-border: #f0c4b0;
+  --color-primary: #ff3d2e;
   --color-primary-foreground: #fffaf8;
-  --color-accent: #1a1a1a;
-  --color-accent-foreground: #f7f6f3;
-  --color-swim: #0b6e99;
-  --color-bike: #d4550a;
-  --color-run: #1f6b45;
-  --color-brick: #3d3d3d;
-  --color-destructive: #b42318;
-  --color-success: #1f6b45;
+  --color-accent: #1a1210;
+  --color-accent-foreground: #fff4ef;
+  --color-swim: #0ea5e9;
+  --color-bike: #f97316;
+  --color-run: #22c55e;
+  --color-brick: #6366f1;
+  --color-destructive: #dc2626;
+  --color-success: #16a34a;
   --font-sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Bebas Neue', ui-sans-serif, system-ui, sans-serif;
 }

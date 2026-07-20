@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -16,6 +17,7 @@ import { selectPlan } from '../content/plans/catalog';
 import {
   localApplyCatchUp,
   localCompleteOnboarding,
+  localDeleteAllUserData,
   localEnsureProfile,
   localGetProfile,
   localGetSession,
@@ -341,4 +343,33 @@ export async function setWearableConnected(
 
 export async function setGarminConnected(uid: string, connected: boolean) {
   return setWearableConnected(uid, 'garminConnected', connected);
+}
+
+async function deleteCollectionDocs(uid: string, subcollection: string) {
+  const snap = await getDocs(collection(db, 'users', uid, subcollection));
+  let batch = writeBatch(db);
+  let ops = 0;
+  for (const d of snap.docs) {
+    batch.delete(d.ref);
+    ops += 1;
+    if (ops >= 400) {
+      await batch.commit();
+      batch = writeBatch(db);
+      ops = 0;
+    }
+  }
+  if (ops > 0) await batch.commit();
+}
+
+/** Permanently remove the signed-in user's Firestore (or local) data. Call before Auth delete. */
+export async function deleteAllUserData(uid: string) {
+  if (shouldUseLocal(uid)) {
+    await localDeleteAllUserData(uid);
+    return;
+  }
+
+  await deleteCollectionDocs(uid, 'sessions');
+  await deleteCollectionDocs(uid, 'enrollments');
+  await deleteCollectionDocs(uid, 'integrations');
+  await deleteDoc(doc(db, 'users', uid));
 }

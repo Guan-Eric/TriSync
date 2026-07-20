@@ -303,3 +303,12 @@ export async function localRescheduleSession(
 export async function localSetGarminConnected(uid: string, connected: boolean) {
   return localSetWearableFlag(uid, 'garminConnected', connected);
 }
+
+export async function localDeleteAllUserData(uid: string) {
+  await AsyncStorage.multiRemove([
+    KEYS.profile(uid),
+    KEYS.sessions(uid),
+    KEYS.enrollment(uid),
+    KEYS.enrollments(uid),
+  ]);
+}

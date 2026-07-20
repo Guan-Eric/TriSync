@@ -7,10 +7,11 @@ import {
   SunMedium,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { colors } from '@/lib/theme';
 import { Text } from '@/components/ui/Text';
 
-const ACTIVE = '#e23d28';
-const INACTIVE = '#5c5a55';
+const ACTIVE = colors.primary;
+const INACTIVE = colors.mutedForeground;
 
 function TabIcon({
   Icon,
@@ -37,8 +38,8 @@ export default function AppLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopColor: '#d5e0e4',
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
           height: 84,
           paddingTop: 10,
           paddingBottom: 18,

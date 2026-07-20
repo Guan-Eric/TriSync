@@ -11,7 +11,7 @@ const map = {
   title: 'text-2xl text-foreground',
   display: 'text-5xl text-foreground',
   caption: 'text-sm text-muted-foreground',
-  label: 'text-xs uppercase tracking-widest text-muted-foreground',
+  label: 'text-xs uppercase tracking-widest text-primary',
 };
 
 const fontStyle: Record<NonNullable<Props['variant']>, TextStyle> = {

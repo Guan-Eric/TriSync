@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { SessionsProvider } from '@/lib/SessionsContext';
+import { colors } from '@/lib/theme';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -43,18 +44,35 @@ export default function RootLayout() {
         <SubscriptionProvider>
           <SessionsProvider>
             <StatusBar style="dark" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ecebe8' } }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.background },
+                animation: 'fade_from_bottom',
+                animationDuration: 320,
+              }}
+            >
               <Stack.Screen name="index" />
-              <Stack.Screen name="(auth)/sign-in" />
-              <Stack.Screen name="(onboarding)/index" />
-              <Stack.Screen name="(app)" />
+              <Stack.Screen name="(auth)/sign-in" options={{ animation: 'fade' }} />
+              <Stack.Screen name="(onboarding)/index" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="(app)" options={{ animation: 'fade' }} />
               <Stack.Screen
                 name="paywall"
-                options={{ presentation: 'modal', headerShown: true, title: 'TriSync Pro' }}
+                options={{
+                  presentation: 'modal',
+                  headerShown: true,
+                  title: 'TriSync Pro',
+                  animation: 'slide_from_bottom',
+                }}
               />
               <Stack.Screen
                 name="log/[id]"
-                options={{ presentation: 'modal', headerShown: true, title: 'How did it go?' }}
+                options={{
+                  presentation: 'modal',
+                  headerShown: true,
+                  title: 'How did it go?',
+                  animation: 'slide_from_bottom',
+                }}
               />
             </Stack>
           </SessionsProvider>

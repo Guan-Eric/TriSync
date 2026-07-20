@@ -59,7 +59,7 @@ export default {
         {
           image: './assets/images/icon.jpg',
           resizeMode: 'contain',
-          backgroundColor: '#ecebe8',
+          backgroundColor: '#fff4ef',
         },
       ],
     ],

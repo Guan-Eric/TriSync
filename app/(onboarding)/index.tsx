@@ -15,6 +15,7 @@ import { computePlanSchedule } from '@/lib/plans';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Screen, Card } from '@/components/ui/Screen';
+import { Animated, riseEntering } from '@/lib/motion';
 import type { ExperienceLevel, RaceDistance } from '@/lib/types';
 
 const distances: { id: RaceDistance; label: string; blurb: string }[] = [
@@ -149,10 +150,14 @@ export default function OnboardingScreen() {
       </Text>
 
       <ScrollView className="flex-1" contentContainerClassName="gap-3 pb-8">
+        <Animated.View key={step} entering={riseEntering} className="gap-3">
         {step === 0
-          ? distances.map((d) => (
+          ? distances.map((d, i) => (
               <Pressable key={d.id} onPress={() => setRaceDistance(d.id)}>
-                <Card className={raceDistance === d.id ? 'border-primary' : undefined}>
+                <Card
+                  enterDelay={i * 50}
+                  className={raceDistance === d.id ? 'border-primary' : undefined}
+                >
                   <Text className="text-lg font-semibold">{d.label}</Text>
                   <Text variant="caption">{d.blurb}</Text>
                 </Card>
@@ -271,6 +276,7 @@ export default function OnboardingScreen() {
             ))}
           </View>
         ) : null}
+        </Animated.View>
       </ScrollView>
 
       <View className="gap-3 pb-8">
