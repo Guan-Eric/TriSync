@@ -9,11 +9,19 @@ let LOG_LEVEL: typeof import('react-native-purchases').LOG_LEVEL | null = null;
 let RevenueCatUI: typeof import('react-native-purchases-ui').default | null = null;
 
 export function getRevenueCatApiKey() {
-  const preferTest = getExtra('useLocalData') === 'true' || __DEV__;
   const testKey = getExtra('revenuecatTestApiKey');
   const liveKey = getExtra('revenuecatApiKey');
-  if (preferTest && testKey) return testKey;
-  return liveKey || testKey || '';
+  // Dev clients may use the Test Store. Release / App Review binaries must use
+  // `appl_…` when present — never silently fall back to `test_…`.
+  if (__DEV__ && testKey) return testKey;
+  if (liveKey) return liveKey;
+  if (getExtra('useLocalData') === 'true' && testKey) return testKey;
+  if (testKey && !__DEV__) {
+    console.warn(
+      '[RevenueCat] REVENUECAT_API_KEY (appl_…) missing in this build; refusing Test Store fallback.'
+    );
+  }
+  return '';
 }
 
 export function canUseRevenueCat() {
