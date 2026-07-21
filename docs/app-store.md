@@ -38,9 +38,10 @@ Apple rejected because (1) the plan/paywall showed an IAP error, (2) IAPs were n
 
 **Binary / sandbox:**
 
-1. Production EAS secret must include `REVENUECAT_API_KEY` (`appl_…`), not only the Test Store key.
-2. Verify on a physical **iPhone and iPad** (sandbox): paywall shows weekly + yearly, purchase grants `pro`, restore works.
-3. In App Review notes: demo account + short note that subscriptions are sandbox-ready.
+1. Production EAS secret must include `REVENUECAT_API_KEY` (`appl_…`), not only the Test Store key. Release builds refuse a silent `test_` fallback (empty offerings → App Review 2.1(b)).
+2. Do **not** set `USE_LOCAL_DATA=true` on the production EAS profile.
+3. Verify on a physical **iPhone and iPad** (sandbox): paywall shows weekly + yearly, purchase grants `pro`, restore works.
+4. In App Review notes: demo account + short note that subscriptions are sandbox-ready. Rejected IAPs (`trisync_weekly` / `trisync_yearly`) must be resubmitted **with** the new binary.
 
 **In-app (shipped in this codebase):**
 
