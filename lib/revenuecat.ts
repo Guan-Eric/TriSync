@@ -53,8 +53,9 @@ async function loadRevenueCatUI() {
 
 export async function getPurchasesClient() {
   if (!canUseRevenueCat()) return null;
+  await configureRevenueCat();
   const ok = await loadPurchases();
-  return ok && Purchases ? Purchases : null;
+  return ok && Purchases && configured ? Purchases : null;
 }
 
 export async function configureRevenueCat(appUserId?: string) {

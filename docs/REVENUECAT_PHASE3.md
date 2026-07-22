@@ -40,7 +40,12 @@ Dev builds prefer `REVENUECAT_TEST_API_KEY` when set. EAS production builds must
    - Submit the version for review **together** with both IAPs (Rejected IAPs must be resubmitted with the app)
    - After one IAP is approved, later products can use RevenueCat `submit-products-to-store`
 4. **Sandbox / TestFlight verify** with the `appl_` key: offerings resolve, purchase grants `pro`, restore works.
-5. **EAS production secret** — `REVENUECAT_API_KEY` must be the App Store public SDK key (`appl_…`). Do not ship only `REVENUECAT_TEST_API_KEY`. Release builds no longer fall back to the Test Store key.
+5. **EAS production secret** — `REVENUECAT_API_KEY` must be the App Store public SDK key (`appl_…`).
+   - **Visibility must be Sensitive (or Plain text), NOT Secret.**
+   - Expo does not expose `Secret` vars when resolving `app.config.js` in EAS CLI, so `extra.revenuecatApiKey` can be baked empty into TestFlight builds even though the var exists in the dashboard.
+   - Public RevenueCat SDK keys are meant to ship in the client anyway; Secret is for things like `NPM_TOKEN`, not `appl_…`.
+   - After changing visibility, rebuild (config is baked at build time).
+   - Release builds no longer fall back to the Test Store key.
 
 ### Why App Review saw an error on the subscription page
 
