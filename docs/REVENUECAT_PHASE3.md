@@ -32,6 +32,8 @@ Dev builds prefer `REVENUECAT_TEST_API_KEY` when set. EAS production builds must
 
 1. **Paid Applications Agreement** + banking/tax active in App Store Connect.
 2. **Privacy policy URL** — set on both subscriptions in ASC (or via RevenueCat `set-product-store-state` → `privacy_policy_url`). Use `https://guan-eric.github.io/trisync-legal/privacy/`.
+   - As of Jul 21, 2026 this was updated from the broken `https://www.gym-pulse.fit/trisync` (403) URL.
+   - Both App Store products were still `REJECTED` / `needs_action` after that fix — they must be **resubmitted with the app version**, not fixed by rebuilding alone.
 3. **First IAP with binary** — Apple requires the first subscription to be submitted **with a new app version**:
    - Upload binary (EAS / Xcode)
    - In App Store Connect → version page → **In-App Purchases and Subscriptions** → add `trisync_weekly` and `trisync_yearly`

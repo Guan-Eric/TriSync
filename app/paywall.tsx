@@ -12,7 +12,7 @@ import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases
 import { router, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSubscription } from '@/lib/SubscriptionContext';
-import { canUseRevenueCat, getPurchasesClient, restorePurchases } from '@/lib/revenuecat';
+import { canUseRevenueCat, getPurchasesClient, getRevenueCatApiKey, restorePurchases } from '@/lib/revenuecat';
 import { colors } from '@/lib/theme';
 import { Animated, heroEntering, popEntering, riseEntering } from '@/lib/motion';
 import { Screen, Card } from '@/components/ui/Screen';
@@ -85,9 +85,17 @@ export default function PaywallScreen() {
 
   const loadOfferings = useCallback(async () => {
     const client = await getPurchasesClient();
+    const key = getRevenueCatApiKey();
+    const keyKind = key.startsWith('appl_')
+      ? 'App Store (appl_)'
+      : key.startsWith('test_')
+        ? 'Test Store (test_)'
+        : key
+          ? 'unknown key'
+          : 'missing key';
     if (!client) {
       setOffering(null);
-      setLoadError('Purchases are unavailable in this build.');
+      setLoadError(`Purchases unavailable in this build (${keyKind}).`);
       return null;
     }
     try {
@@ -95,8 +103,11 @@ export default function PaywallScreen() {
       const current = offerings.current ?? null;
       setOffering(current);
       if (!current?.availablePackages?.length) {
+        const offeringIds = Object.keys(offerings.all ?? {});
         setLoadError(
-          'Subscription options could not be loaded. Check your connection and try again. If this continues, the App Store products may not be available yet.'
+          `StoreKit returned no packages (${keyKind}). Offerings: ${
+            offeringIds.length ? offeringIds.join(', ') : 'none'
+          }. If this is TestFlight, confirm Paid Apps Agreement is Active and wait up to ~1 hour after ASC product changes.`
         );
       } else {
         setLoadError(null);
@@ -104,7 +115,8 @@ export default function PaywallScreen() {
       return current;
     } catch (e: unknown) {
       setOffering(null);
-      setLoadError(e instanceof Error ? e.message : 'Could not load subscription options.');
+      const msg = e instanceof Error ? e.message : 'Could not load subscription options.';
+      setLoadError(`${msg} (${keyKind})`);
       return null;
     }
   }, []);

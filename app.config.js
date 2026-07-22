@@ -7,6 +7,19 @@ const hasValidEasId =
     EAS_PROJECT_ID
   );
 
+// EAS production / TestFlight builds must bake the App Store public SDK key.
+// A missing key here is the #1 cause of empty offerings on TestFlight when ASC is Ready to Submit.
+const isEasBuild = Boolean(process.env.EAS_BUILD);
+const isNonDevProfile =
+  process.env.EAS_BUILD_PROFILE === 'production' ||
+  process.env.EAS_BUILD_PROFILE === 'preview';
+const revenuecatApiKey = process.env.REVENUECAT_API_KEY?.trim() || '';
+if (isEasBuild && isNonDevProfile && !revenuecatApiKey.startsWith('appl_')) {
+  throw new Error(
+    `[TriSync] EAS profile "${process.env.EAS_BUILD_PROFILE}" requires REVENUECAT_API_KEY (appl_…) as an EAS Environment variable / secret for this project. Local .env is not used on EAS cloud builds.`
+  );
+}
+
 export default {
   expo: {
     name: 'TriSync',
@@ -82,7 +95,7 @@ export default {
       storageBucket: process.env.STORAGE_BUCKET,
       messagingSenderId: process.env.MESSAGING_SENDER_ID,
       appId: process.env.APP_ID,
-      revenuecatApiKey: process.env.REVENUECAT_API_KEY,
+      revenuecatApiKey,
       revenuecatTestApiKey: process.env.REVENUECAT_TEST_API_KEY,
       garminClientId: process.env.GARMIN_CLIENT_ID,
       garminClientSecret: process.env.GARMIN_CLIENT_SECRET,
